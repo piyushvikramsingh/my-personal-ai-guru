@@ -22,6 +22,8 @@ type DBMessage = {
 
 export function ChatApp() {
   const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [authReady, setAuthReady] = useState(false);
   const [convs, setConvs] = useState<Conversation[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [messages, setMessages] = useState<DBMessage[]>([]);
@@ -40,22 +42,35 @@ export function ChatApp() {
   useEffect(() => {
     let mounted = true;
     const ensureSession = async () => {
-      const { data } = await supabase.auth.getSession();
-      if (!mounted) return;
-      if (data.session) {
-        setUserEmail(data.session.user.email ?? null);
-        return;
+      try {
+        const { data } = await supabase.auth.getSession();
+        if (!mounted) return;
+        if (data.session) {
+          setCurrentUserId(data.session.user.id);
+          setUserEmail(data.session.user.email ?? null);
+          setAuthReady(true);
+          return;
+        }
+        const { data: anon, error } = await supabase.auth.signInAnonymously();
+        if (error || !anon.session) {
+          toast.error("Could not start guest session. Please sign in.");
+          setAuthReady(true);
+          return;
+        }
+        if (mounted) {
+          setCurrentUserId(anon.session.user.id);
+          setUserEmail(anon.session.user.email ?? null);
+          setAuthReady(true);
+        }
+      } catch {
+        if (mounted) setAuthReady(true);
       }
-      const { data: anon, error } = await supabase.auth.signInAnonymously();
-      if (error) {
-        toast.error("Could not start guest session. Please sign in.");
-        return;
-      }
-      if (mounted) setUserEmail(anon.user?.email ?? null);
     };
     ensureSession();
     const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
+      setCurrentUserId(session?.user?.id ?? null);
       setUserEmail(session?.user?.email ?? null);
+      setAuthReady(true);
     });
     return () => { mounted = false; sub.subscription.unsubscribe(); };
   }, []);
@@ -70,7 +85,7 @@ export function ChatApp() {
     if (!activeId && data && data.length) setActiveId(data[0].id);
   }, [activeId]);
 
-  useEffect(() => { if (userEmail) loadConvs(); }, [userEmail, loadConvs]);
+  useEffect(() => { if (authReady && currentUserId) loadConvs(); }, [authReady, currentUserId, loadConvs]);
 
   // Load messages for active conversation
   useEffect(() => {
@@ -79,7 +94,10 @@ export function ChatApp() {
       .select("id,role,content,attachments,created_at")
       .eq("conversation_id", activeId)
       .order("created_at")
-      .then(({ data }) => setMessages((data ?? []) as any));
+      .then(({ data, error }) => {
+        if (error) return;
+        setMessages((data ?? []) as any);
+      });
   }, [activeId]);
 
   useEffect(() => {
@@ -87,15 +105,10 @@ export function ChatApp() {
   }, [messages, streaming]);
 
   const newChat = async () => {
-    const { data: u } = await supabase.auth.getUser();
-    if (!u.user) return;
-    const { data, error } = await supabase
-      .from("conversations").insert({ user_id: u.user.id, title: "New chat" })
-      .select("id,title,updated_at").single();
-    if (error) { toast.error(error.message); return; }
-    setConvs((c) => [data as any, ...c]);
-    setActiveId(data!.id);
+    setActiveId(null);
     setMessages([]);
+    setInput("");
+    setAttachments([]);
   };
 
   const deleteConv = async (id: string) => {
@@ -132,22 +145,14 @@ export function ChatApp() {
     if (busy) return;
     const text = input.trim();
     if (!text && attachments.length === 0) return;
+    if (!authReady) {
+      toast.error("Starting your chat session. Please try again in a moment.");
+      return;
+    }
 
     let convId = activeId;
-    if (!convId) {
-      const { data: u } = await supabase.auth.getUser();
-      if (!u.user) {
-        toast.error("Please sign in to start chatting.");
-        return;
-      }
-      const { data, error } = await supabase
-        .from("conversations").insert({ user_id: u.user.id, title: "New chat" })
-        .select("id,title,updated_at").single();
-      if (error) { toast.error(error.message); return; }
-      setConvs((c) => [data as any, ...c]);
-      convId = data!.id;
-      setActiveId(convId);
-    }
+    const optimisticConvId = convId ?? crypto.randomUUID();
+    if (!convId) setActiveId(optimisticConvId);
 
     const userMsg: DBMessage = {
       id: crypto.randomUUID(), role: "user", content: text,
@@ -183,8 +188,18 @@ export function ChatApp() {
         const t = await resp.text().catch(() => "");
         try { const j = JSON.parse(t); toast.error(j.error || "Request failed"); }
         catch { toast.error(t || "Request failed"); }
+        if (!convId) setActiveId(null);
         setBusy(false);
         return;
+      }
+
+      const persistedConversationId = resp.headers.get("x-conversation-id");
+      if (!convId && persistedConversationId) {
+        convId = persistedConversationId;
+        setActiveId(persistedConversationId);
+        setConvs((c) => c.some((x) => x.id === persistedConversationId)
+          ? c
+          : [{ id: persistedConversationId, title: text.slice(0, 60) || "New chat", updated_at: new Date().toISOString() }, ...c]);
       }
 
       const reader = resp.body.getReader();

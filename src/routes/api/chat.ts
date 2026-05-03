@@ -171,9 +171,25 @@ export const Route = createFileRoute("/api/chat")({
         );
 
         const body = (await request.json()) as {
-          conversationId: string;
+          conversationId?: string | null;
           messages: IncomingMessage[];
         };
+
+        let conversationId = body.conversationId ?? "";
+        if (!conversationId) {
+          const firstUser = body.messages.find((m) => m.role === "user");
+          const title = firstUser?.content?.trim().slice(0, 60) || "New chat";
+          const { data: conversation, error: conversationError } = await supabase
+            .from("conversations")
+            .insert({ user_id: userId, title })
+            .select("id")
+            .single();
+          if (conversationError || !conversation) {
+            console.error("Conversation create error", conversationError);
+            return new Response(JSON.stringify({ error: "Could not start conversation" }), { status: 500 });
+          }
+          conversationId = conversation.id;
+        }
 
         // Build OpenAI-style messages with multimodal content
         const aiMessages: any[] = [{ role: "system", content: SYSTEM }];
@@ -236,7 +252,7 @@ export const Route = createFileRoute("/api/chat")({
         const lastUser = [...body.messages].reverse().find((m) => m.role === "user");
         if (lastUser) {
           await supabase.from("messages").insert({
-            conversation_id: body.conversationId,
+            conversation_id: conversationId,
             user_id: userId,
             role: "user",
             content: lastUser.content,
@@ -274,17 +290,17 @@ export const Route = createFileRoute("/api/chat")({
             }
             if (assistantText) {
               await supabase.from("messages").insert({
-                conversation_id: body.conversationId,
+                conversation_id: conversationId,
                 user_id: userId,
                 role: "assistant",
                 content: assistantText,
               });
-              await supabase.from("conversations").update({ updated_at: new Date().toISOString() }).eq("id", body.conversationId);
+              await supabase.from("conversations").update({ updated_at: new Date().toISOString() }).eq("id", conversationId);
               // auto-title if currently default
-              const { data: conv } = await supabase.from("conversations").select("title").eq("id", body.conversationId).maybeSingle();
+              const { data: conv } = await supabase.from("conversations").select("title").eq("id", conversationId).maybeSingle();
               if (conv && (conv.title === "New chat" || !conv.title) && lastUser?.content) {
                 const t = lastUser.content.trim().slice(0, 60);
-                await supabase.from("conversations").update({ title: t || "New chat" }).eq("id", body.conversationId);
+                await supabase.from("conversations").update({ title: t || "New chat" }).eq("id", conversationId);
               }
             }
           } catch (e) {
@@ -293,7 +309,7 @@ export const Route = createFileRoute("/api/chat")({
         })();
 
         return new Response(forward, {
-          headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache" },
+          headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", "X-Conversation-Id": conversationId },
         });
       },
     },
