@@ -116,12 +116,13 @@ export function ChatApp() {
 
     let convId = activeId;
     if (!convId) {
-      // Try to get authenticated user, fallback to guest with generated UUID
       const { data: u } = await supabase.auth.getUser();
-      const userId = u.user?.id || crypto.randomUUID();
-      
+      if (!u.user) {
+        toast.error("Please sign in to start chatting.");
+        return;
+      }
       const { data, error } = await supabase
-        .from("conversations").insert({ user_id: userId, title: "New chat" })
+        .from("conversations").insert({ user_id: u.user.id, title: "New chat" })
         .select("id,title,updated_at").single();
       if (error) { toast.error(error.message); return; }
       setConvs((c) => [data as any, ...c]);
