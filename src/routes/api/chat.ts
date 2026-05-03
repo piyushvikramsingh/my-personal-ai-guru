@@ -149,7 +149,7 @@ export const Route = createFileRoute("/api/chat")({
         const auth = request.headers.get("authorization") ?? "";
         const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
         
-        let userId = crypto.randomUUID(); // Generate UUID for guest users
+        let userId: string = crypto.randomUUID(); // Generate UUID for guest users
         
         // If token is provided, validate it
         if (token) {
