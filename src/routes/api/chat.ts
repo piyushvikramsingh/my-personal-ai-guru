@@ -175,7 +175,7 @@ export const Route = createFileRoute("/api/chat")({
           messages: IncomingMessage[];
         };
 
-        let conversationId = body.conversationId;
+        let conversationId = body.conversationId ?? "";
         if (!conversationId) {
           const firstUser = body.messages.find((m) => m.role === "user");
           const title = firstUser?.content?.trim().slice(0, 60) || "New chat";
