@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useServerFn } from "@tanstack/react-start";
-import { listDriveFiles, fetchDriveFile } from "@/server/drive.functions";
+import { listDriveFiles, fetchDriveFile } from "@/routes/api/drive.server";
 import { iconFor, type LocalAttachment } from "./Attachments";
 import { Loader2, FolderOpen } from "lucide-react";
 import { toast } from "sonner";

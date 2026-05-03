@@ -27,19 +27,38 @@ function AuthPage() {
     setLoading(true);
     try {
       if (mode === "signup") {
-        const { error } = await supabase.auth.signUp({
+        const { data, error } = await supabase.auth.signUp({
           email, password,
           options: { emailRedirectTo: window.location.origin },
         });
         if (error) throw error;
-        toast.success("Check your email to confirm your account.");
+        // If the session was created immediately (auto-confirmed), navigate to chat
+        if (data.session) {
+          nav({ to: "/" });
+        } else {
+          // Otherwise, show the confirmation message
+          toast.success("Check your email to confirm your account.");
+          // Auto-switch to sign-in mode after successful signup for smoother UX
+          setMode("signin");
+        }
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
-        nav({ to: "/" });
+        // Wait briefly for the session to be persisted before navigating
+        const { data } = await supabase.auth.getSession();
+        if (data.session) {
+          nav({ to: "/" });
+        } else {
+          throw new Error("Session not established after sign-in");
+        }
       }
     } catch (err: any) {
-      toast.error(err.message ?? "Authentication failed");
+      let errorMsg = err.message ?? "Authentication failed";
+      // Provide helpful guidance for common errors
+      if (errorMsg.includes("CORS") || errorMsg.includes("Failed to fetch")) {
+        errorMsg = "Authentication service unreachable. Ensure your Supabase project is configured with your domain in Authentication → URL Configuration.";
+      }
+      toast.error(errorMsg);
     } finally { setLoading(false); }
   };
 
@@ -86,7 +105,7 @@ function AuthPage() {
 
           <p className="text-sm text-center text-muted-foreground mt-6">
             {mode === "signin" ? "No account?" : "Have an account?"}{" "}
-            <button className="text-primary hover:underline" onClick={()=>setMode(mode==="signin"?"signup":"signin")}>
+            <button type="button" className="text-primary hover:underline" onClick={() => setMode(mode === "signin" ? "signup" : "signin") }>
               {mode === "signin" ? "Sign up" : "Sign in"}
             </button>
           </p>

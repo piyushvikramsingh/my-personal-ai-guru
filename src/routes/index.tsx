@@ -1,6 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { Sparkles } from "lucide-react";
 
 export const Route = createFileRoute("/")({ component: Index });
@@ -8,10 +7,8 @@ export const Route = createFileRoute("/")({ component: Index });
 function Index() {
   const nav = useNavigate();
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      if (data.session) nav({ to: "/chat" });
-      else nav({ to: "/auth" });
-    });
+    // Redirect directly to chat without auth check
+    nav({ to: "/chat" });
   }, [nav]);
 
   return (
