@@ -215,9 +215,10 @@ export const Route = createFileRoute("/api/chat")({
           method: "POST",
           headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
           body: JSON.stringify({
-            model: "google/gemini-3-flash-preview",
+            model: "google/gemini-2.5-pro",
             messages: aiMessages,
             stream: true,
+            reasoning: { effort: "medium" },
           }),
         });
 
