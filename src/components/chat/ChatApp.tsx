@@ -35,10 +35,29 @@ export function ChatApp() {
   const [editTitle, setEditTitle] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Auth gate - temporarily disabled
+  // Ensure a session exists: real user OR anonymous guest.
+  // Anonymous sign-in gives a real auth.uid() so RLS policies pass.
   useEffect(() => {
-    // Auth check removed - app is now accessible without login
-    setUserEmail(null);
+    let mounted = true;
+    const ensureSession = async () => {
+      const { data } = await supabase.auth.getSession();
+      if (!mounted) return;
+      if (data.session) {
+        setUserEmail(data.session.user.email ?? null);
+        return;
+      }
+      const { data: anon, error } = await supabase.auth.signInAnonymously();
+      if (error) {
+        toast.error("Could not start guest session. Please sign in.");
+        return;
+      }
+      if (mounted) setUserEmail(anon.user?.email ?? null);
+    };
+    ensureSession();
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
+      setUserEmail(session?.user?.email ?? null);
+    });
+    return () => { mounted = false; sub.subscription.unsubscribe(); };
   }, []);
 
   // Load conversations
