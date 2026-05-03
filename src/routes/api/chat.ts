@@ -163,10 +163,10 @@ export const Route = createFileRoute("/api/chat")({
           }
         }
 
-        // Create supabase client for database operations
+        // Create supabase admin client (service role) for DB writes — bypasses RLS safely on the server.
         const supabase = createClient(
           process.env.SUPABASE_URL!,
-          process.env.SUPABASE_PUBLISHABLE_KEY!,
+          process.env.SUPABASE_SERVICE_ROLE_KEY!,
           { auth: { persistSession: false } }
         );
 
