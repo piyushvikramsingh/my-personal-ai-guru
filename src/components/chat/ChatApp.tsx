@@ -145,22 +145,14 @@ export function ChatApp() {
     if (busy) return;
     const text = input.trim();
     if (!text && attachments.length === 0) return;
+    if (!authReady) {
+      toast.error("Starting your chat session. Please try again in a moment.");
+      return;
+    }
 
     let convId = activeId;
-    if (!convId) {
-      const { data: u } = await supabase.auth.getUser();
-      if (!u.user) {
-        toast.error("Please sign in to start chatting.");
-        return;
-      }
-      const { data, error } = await supabase
-        .from("conversations").insert({ user_id: u.user.id, title: "New chat" })
-        .select("id,title,updated_at").single();
-      if (error) { toast.error(error.message); return; }
-      setConvs((c) => [data as any, ...c]);
-      convId = data!.id;
-      setActiveId(convId);
-    }
+    const optimisticConvId = convId ?? crypto.randomUUID();
+    if (!convId) setActiveId(optimisticConvId);
 
     const userMsg: DBMessage = {
       id: crypto.randomUUID(), role: "user", content: text,
@@ -196,8 +188,18 @@ export function ChatApp() {
         const t = await resp.text().catch(() => "");
         try { const j = JSON.parse(t); toast.error(j.error || "Request failed"); }
         catch { toast.error(t || "Request failed"); }
+        if (!convId) setActiveId(null);
         setBusy(false);
         return;
+      }
+
+      const persistedConversationId = resp.headers.get("x-conversation-id");
+      if (!convId && persistedConversationId) {
+        convId = persistedConversationId;
+        setActiveId(persistedConversationId);
+        setConvs((c) => c.some((x) => x.id === persistedConversationId)
+          ? c
+          : [{ id: persistedConversationId, title: text.slice(0, 60) || "New chat", updated_at: new Date().toISOString() }, ...c]);
       }
 
       const reader = resp.body.getReader();
