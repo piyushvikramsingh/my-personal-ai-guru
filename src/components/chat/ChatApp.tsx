@@ -25,7 +25,6 @@ type DBMessage = {
 export function ChatApp() {
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-  const [authReady, setAuthReady] = useState(false);
   const [convs, setConvs] = useState<Conversation[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [messages, setMessages] = useState<DBMessage[]>([]);
@@ -37,44 +36,20 @@ export function ChatApp() {
   const [searchQuery, setSearchQuery] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState("");
+  const [debug, setDebug] = useState<DebugInfo>({});
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Ensure a session exists: real user OR anonymous guest.
-  // Anonymous sign-in gives a real auth.uid() so RLS policies pass.
+  // AuthGate guarantees a session before this component mounts.
   useEffect(() => {
-    let mounted = true;
-    const ensureSession = async () => {
-      try {
-        const { data } = await supabase.auth.getSession();
-        if (!mounted) return;
-        if (data.session) {
-          setCurrentUserId(data.session.user.id);
-          setUserEmail(data.session.user.email ?? null);
-          setAuthReady(true);
-          return;
-        }
-        const { data: anon, error } = await supabase.auth.signInAnonymously();
-        if (error || !anon.session) {
-          toast.error("Could not start guest session. Please sign in.");
-          setAuthReady(true);
-          return;
-        }
-        if (mounted) {
-          setCurrentUserId(anon.session.user.id);
-          setUserEmail(anon.session.user.email ?? null);
-          setAuthReady(true);
-        }
-      } catch {
-        if (mounted) setAuthReady(true);
-      }
-    };
-    ensureSession();
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
+    supabase.auth.getSession().then(({ data }) => {
+      setCurrentUserId(data.session?.user?.id ?? null);
+      setUserEmail(data.session?.user?.email ?? null);
+    });
+    const sub = supabase.auth.onAuthStateChange((_e, session) => {
       setCurrentUserId(session?.user?.id ?? null);
       setUserEmail(session?.user?.email ?? null);
-      setAuthReady(true);
     });
-    return () => { mounted = false; sub.subscription.unsubscribe(); };
+    return () => sub.data.subscription.unsubscribe();
   }, []);
 
   // Load conversations
@@ -87,7 +62,7 @@ export function ChatApp() {
     if (!activeId && data && data.length) setActiveId(data[0].id);
   }, [activeId]);
 
-  useEffect(() => { if (authReady && currentUserId) loadConvs(); }, [authReady, currentUserId, loadConvs]);
+  useEffect(() => { if (currentUserId) loadConvs(); }, [currentUserId, loadConvs]);
 
   // Load messages for active conversation
   useEffect(() => {
