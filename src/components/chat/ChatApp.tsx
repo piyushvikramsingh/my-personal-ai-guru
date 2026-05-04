@@ -7,6 +7,8 @@ import { toast } from "sonner";
 import { Markdown } from "./Markdown";
 import { AttachmentChip, FilePicker, type LocalAttachment } from "./Attachments";
 import { DrivePickerDialog } from "./DrivePicker";
+import { DebugPanel, type DebugInfo } from "./DebugPanel";
+import { ingestDocument } from "@/server/documents.functions";
 import {
   Plus, Send, Sparkles, MessageSquare, Trash2, FolderOpen, User2, Bot, Copy, RotateCcw, Edit2, Search, X, Check, Clock, Zap, Globe, BookOpen, Brain,
 } from "lucide-react";
@@ -23,7 +25,6 @@ type DBMessage = {
 export function ChatApp() {
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-  const [authReady, setAuthReady] = useState(false);
   const [convs, setConvs] = useState<Conversation[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [messages, setMessages] = useState<DBMessage[]>([]);
@@ -35,44 +36,20 @@ export function ChatApp() {
   const [searchQuery, setSearchQuery] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState("");
+  const [debug, setDebug] = useState<DebugInfo>({});
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Ensure a session exists: real user OR anonymous guest.
-  // Anonymous sign-in gives a real auth.uid() so RLS policies pass.
+  // AuthGate guarantees a session before this component mounts.
   useEffect(() => {
-    let mounted = true;
-    const ensureSession = async () => {
-      try {
-        const { data } = await supabase.auth.getSession();
-        if (!mounted) return;
-        if (data.session) {
-          setCurrentUserId(data.session.user.id);
-          setUserEmail(data.session.user.email ?? null);
-          setAuthReady(true);
-          return;
-        }
-        const { data: anon, error } = await supabase.auth.signInAnonymously();
-        if (error || !anon.session) {
-          toast.error("Could not start guest session. Please sign in.");
-          setAuthReady(true);
-          return;
-        }
-        if (mounted) {
-          setCurrentUserId(anon.session.user.id);
-          setUserEmail(anon.session.user.email ?? null);
-          setAuthReady(true);
-        }
-      } catch {
-        if (mounted) setAuthReady(true);
-      }
-    };
-    ensureSession();
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
+    supabase.auth.getSession().then(({ data }) => {
+      setCurrentUserId(data.session?.user?.id ?? null);
+      setUserEmail(data.session?.user?.email ?? null);
+    });
+    const sub = supabase.auth.onAuthStateChange((_e, session) => {
       setCurrentUserId(session?.user?.id ?? null);
       setUserEmail(session?.user?.email ?? null);
-      setAuthReady(true);
     });
-    return () => { mounted = false; sub.subscription.unsubscribe(); };
+    return () => sub.data.subscription.unsubscribe();
   }, []);
 
   // Load conversations
@@ -85,7 +62,7 @@ export function ChatApp() {
     if (!activeId && data && data.length) setActiveId(data[0].id);
   }, [activeId]);
 
-  useEffect(() => { if (authReady && currentUserId) loadConvs(); }, [authReady, currentUserId, loadConvs]);
+  useEffect(() => { if (currentUserId) loadConvs(); }, [currentUserId, loadConvs]);
 
   // Load messages for active conversation
   useEffect(() => {
@@ -141,18 +118,32 @@ export function ChatApp() {
     setInput(lastUserMsg.content);
   };
 
+  // Ingest a file attachment (local or drive) into the RAG store. Returns documentId.
+  const ingestAttachment = async (a: LocalAttachment, conversationId: string | null): Promise<string | null> => {
+    try {
+      const r = await ingestDocument({ data: {
+        name: a.name, mime: a.mime, size: a.size,
+        source: a.source, dataUrl: a.dataUrl, text: a.text,
+        conversationId,
+      }});
+      return r.documentId;
+    } catch (e: any) {
+      console.warn("ingest failed", a.name, e);
+      toast.error(`Could not analyze ${a.name}: ${e?.message ?? "unknown error"}`);
+      return null;
+    }
+  };
+
   const send = async () => {
     if (busy) return;
     const text = input.trim();
     if (!text && attachments.length === 0) return;
-    if (!authReady) {
-      toast.error("Starting your chat session. Please try again in a moment.");
+    if (!currentUserId) {
+      toast.error("Session not ready yet. Please wait a moment.");
       return;
     }
 
     let convId = activeId;
-    const optimisticConvId = convId ?? crypto.randomUUID();
-    if (!convId) setActiveId(optimisticConvId);
 
     const userMsg: DBMessage = {
       id: crypto.randomUUID(), role: "user", content: text,
@@ -165,13 +156,21 @@ export function ChatApp() {
     setAttachments([]);
     setStreaming("");
     setBusy(true);
+    setDebug((d) => ({ ...d, lastSentAt: new Date().toISOString(), lastError: null }));
 
     try {
+      // Kick off ingestion in parallel for any attachment that has text/PDF content
+      const ingestable = sentAttachments.filter((a) =>
+        a.text || a.mime === "application/pdf" || a.mime.startsWith("text/") || a.mime === "application/json"
+      );
+      const documentIds = (await Promise.all(ingestable.map((a) => ingestAttachment(a, convId))))
+        .filter(Boolean) as string[];
+
       const { data: sess } = await supabase.auth.getSession();
       const token = sess.session?.access_token;
-      // Build payload from full history
       const payload = {
         conversationId: convId,
+        documentIds,
         messages: [
           ...messages.map((m) => ({ role: m.role, content: m.content })),
           { role: "user" as const, content: text, attachments: sentAttachments.map((a) => ({
@@ -184,23 +183,35 @@ export function ChatApp() {
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify(payload),
       });
+      setDebug((d) => ({ ...d, lastStatus: resp.status }));
+
       if (!resp.ok || !resp.body) {
         const t = await resp.text().catch(() => "");
-        try { const j = JSON.parse(t); toast.error(j.error || "Request failed"); }
-        catch { toast.error(t || "Request failed"); }
-        if (!convId) setActiveId(null);
+        let msg = t;
+        try { msg = JSON.parse(t).error || t; } catch { /* keep raw */ }
+        toast.error(msg || "Request failed");
+        setDebug((d) => ({ ...d, lastError: msg }));
         setBusy(false);
         return;
       }
 
+      // Always trust the server-provided conversation id.
       const persistedConversationId = resp.headers.get("x-conversation-id");
-      if (!convId && persistedConversationId) {
+      if (persistedConversationId) {
         convId = persistedConversationId;
         setActiveId(persistedConversationId);
         setConvs((c) => c.some((x) => x.id === persistedConversationId)
           ? c
           : [{ id: persistedConversationId, title: text.slice(0, 60) || "New chat", updated_at: new Date().toISOString() }, ...c]);
+        setDebug((d) => ({ ...d, lastConversationId: persistedConversationId }));
       }
+
+      const rawCites = resp.headers.get("x-citations");
+      let citations: any[] = [];
+      if (rawCites) {
+        try { citations = JSON.parse(decodeURIComponent(rawCites)); } catch { /* ignore */ }
+      }
+      setDebug((d) => ({ ...d, lastCitations: citations }));
 
       const reader = resp.body.getReader();
       const dec = new TextDecoder();
@@ -225,16 +236,28 @@ export function ChatApp() {
         }
       }
 
+      let finalContent = acc;
+      if (citations.length) {
+        const seen = new Set<string>();
+        const uniq = citations.filter((c) => {
+          const k = `${c.document_id}:${c.chunk_index}`;
+          if (seen.has(k)) return false; seen.add(k); return true;
+        });
+        finalContent += "\n\n---\n**Sources**\n" + uniq.map((c, i) =>
+          `${i + 1}. ${c.document_name} §${c.chunk_index}`
+        ).join("\n");
+      }
+
       const assistantMsg: DBMessage = {
-        id: crypto.randomUUID(), role: "assistant", content: acc, attachments: [],
+        id: crypto.randomUUID(), role: "assistant", content: finalContent, attachments: [],
         created_at: new Date().toISOString(),
       };
       setMessages((m) => [...m, assistantMsg]);
       setStreaming("");
-      // refresh conversation list (titles/updated_at)
       loadConvs();
     } catch (e: any) {
       toast.error(e.message ?? "Network error");
+      setDebug((d) => ({ ...d, lastError: e?.message ?? "Network error" }));
     } finally {
       setBusy(false);
     }
@@ -428,6 +451,7 @@ export function ChatApp() {
         onOpenChange={setDriveOpen}
         onPick={(a) => setAttachments((arr) => [...arr, a])}
       />
+      {import.meta.env.DEV && <DebugPanel debug={debug} />}
     </div>
   );
 }
