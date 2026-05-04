@@ -357,7 +357,13 @@ export const Route = createFileRoute("/api/chat")({
         })();
 
         return new Response(forward, {
-          headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", "X-Conversation-Id": conversationId },
+          headers: {
+            "Content-Type": "text/event-stream",
+            "Cache-Control": "no-cache",
+            "X-Conversation-Id": conversationId,
+            "X-Citations": rag.citations.length ? encodeURIComponent(JSON.stringify(rag.citations)) : "",
+            "Access-Control-Expose-Headers": "X-Conversation-Id, X-Citations",
+          },
         });
       },
     },
