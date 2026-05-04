@@ -10,7 +10,7 @@ import { DrivePickerDialog } from "./DrivePicker";
 import { DebugPanel, type DebugInfo } from "./DebugPanel";
 import { ingestDocument } from "@/server/documents.functions";
 import {
-  Plus, Send, Sparkles, MessageSquare, Trash2, FolderOpen, User2, Bot, Copy, RotateCcw, Edit2, Search, X, Check, Clock, Zap, Globe, BookOpen, Brain, Database,
+  Plus, Send, Sparkles, MessageSquare, Trash2, FolderOpen, User2, Bot, Copy, RotateCcw, Edit2, Search, X, Check, Clock, Zap, Globe, BookOpen, Brain,
 } from "lucide-react";
 
 type Conversation = { id: string; title: string; updated_at: string };
