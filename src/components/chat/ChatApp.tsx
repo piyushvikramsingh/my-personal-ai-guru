@@ -451,6 +451,7 @@ export function ChatApp() {
         onOpenChange={setDriveOpen}
         onPick={(a) => setAttachments((arr) => [...arr, a])}
       />
+      {import.meta.env.DEV && <DebugPanel debug={debug} />}
     </div>
   );
 }
