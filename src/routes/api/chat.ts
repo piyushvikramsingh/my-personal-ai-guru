@@ -173,7 +173,50 @@ export const Route = createFileRoute("/api/chat")({
         const body = (await request.json()) as {
           conversationId?: string | null;
           messages: IncomingMessage[];
+          documentIds?: string[] | null;
         };
+
+        // Retrieve relevant document chunks for the user
+        async function retrieveContext(query: string): Promise<{ block: string; citations: { document_id: string; document_name: string; chunk_index: number }[] }> {
+          if (!query.trim()) return { block: "", citations: [] };
+          let chunks: any[] = [];
+          // Try semantic search first
+          try {
+            const embRes = await fetch("https://ai.gateway.lovable.dev/v1/embeddings", {
+              method: "POST",
+              headers: { Authorization: `Bearer ${process.env.LOVABLE_API_KEY}`, "Content-Type": "application/json" },
+              body: JSON.stringify({ model: "openai/text-embedding-3-small", input: query.slice(0, 4000) }),
+            });
+            if (embRes.ok) {
+              const j = await embRes.json();
+              const emb = j.data?.[0]?.embedding;
+              if (emb) {
+                const { data } = await supabase.rpc("match_document_chunks", {
+                  query_embedding: emb,
+                  match_user_id: userId,
+                  match_count: 6,
+                  filter_document_ids: body.documentIds && body.documentIds.length ? body.documentIds : null,
+                });
+                chunks = data ?? [];
+              }
+            }
+          } catch (e) { console.warn("semantic retrieval failed", e); }
+          // Fallback: full-text
+          if (chunks.length === 0) {
+            const { data } = await supabase.rpc("search_document_chunks", {
+              query_text: query.slice(0, 500),
+              match_user_id: userId,
+              match_count: 6,
+              filter_document_ids: body.documentIds && body.documentIds.length ? body.documentIds : null,
+            });
+            chunks = data ?? [];
+          }
+          if (!chunks.length) return { block: "", citations: [] };
+          const cites = chunks.map((c: any) => ({ document_id: c.document_id, document_name: c.document_name, chunk_index: c.chunk_index }));
+          const block = "\n\n**Knowledge Base Excerpts** (cite as `[" + chunks[0].document_name + " §" + chunks[0].chunk_index + "]`):\n" +
+            chunks.map((c: any, i: number) => `\n[${i + 1}] **${c.document_name} §${c.chunk_index}**\n${c.content}`).join("\n");
+          return { block, citations: cites };
+        }
 
         let conversationId = body.conversationId ?? "";
         if (!conversationId) {
