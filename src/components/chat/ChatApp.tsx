@@ -7,8 +7,10 @@ import { toast } from "sonner";
 import { Markdown } from "./Markdown";
 import { AttachmentChip, FilePicker, type LocalAttachment } from "./Attachments";
 import { DrivePickerDialog } from "./DrivePicker";
+import { DebugPanel, type DebugInfo } from "./DebugPanel";
+import { ingestDocument } from "@/server/documents.functions";
 import {
-  Plus, Send, Sparkles, MessageSquare, Trash2, FolderOpen, User2, Bot, Copy, RotateCcw, Edit2, Search, X, Check, Clock, Zap, Globe, BookOpen, Brain,
+  Plus, Send, Sparkles, MessageSquare, Trash2, FolderOpen, User2, Bot, Copy, RotateCcw, Edit2, Search, X, Check, Clock, Zap, Globe, BookOpen, Brain, Database,
 } from "lucide-react";
 
 type Conversation = { id: string; title: string; updated_at: string };
