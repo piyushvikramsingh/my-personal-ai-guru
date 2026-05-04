@@ -240,7 +240,11 @@ export const Route = createFileRoute("/api/chat")({
         // Get last user message for research context
         const lastUserMsg = [...body.messages].reverse().find(m => m.role === "user");
         const researchContext = lastUserMsg ? await buildResearchContext(lastUserMsg.content) : '';
-        
+        const rag = lastUserMsg ? await retrieveContext(lastUserMsg.content) : { block: "", citations: [] as any[] };
+        if (rag.block) {
+          aiMessages[0].content += "\n\nWhen the user's question relates to their uploaded documents, use the **Knowledge Base Excerpts** below and cite them inline as `[document_name §chunk_index]` after each claim.";
+        }
+
         for (const m of body.messages) {
           if (m.role === "assistant") {
             aiMessages.push({ role: "assistant", content: m.content });
@@ -248,12 +252,13 @@ export const Route = createFileRoute("/api/chat")({
           }
           const parts: any[] = [];
           let textBlob = m.content || "";
-          
-          // Add research context to the last user message
-          if (m === lastUserMsg && researchContext) {
-            textBlob += researchContext;
+
+          // Add research + RAG context to the last user message
+          if (m === lastUserMsg) {
+            if (researchContext) textBlob += researchContext;
+            if (rag.block) textBlob += rag.block;
           }
-          
+
           for (const a of m.attachments ?? []) {
             if (a.text) {
               textBlob += `\n\n--- File: ${a.name} (${a.mime}) ---\n${a.text}\n--- end of ${a.name} ---`;
