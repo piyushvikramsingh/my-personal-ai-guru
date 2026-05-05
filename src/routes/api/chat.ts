@@ -174,6 +174,8 @@ export const Route = createFileRoute("/api/chat")({
           conversationId?: string | null;
           messages: IncomingMessage[];
           documentIds?: string[] | null;
+          model?: string | null;
+          systemPrompt?: string | null;
         };
 
         // Retrieve relevant document chunks for the user
