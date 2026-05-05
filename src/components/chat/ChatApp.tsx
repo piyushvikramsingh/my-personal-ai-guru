@@ -9,7 +9,7 @@ import { AttachmentChip, FilePicker, type LocalAttachment } from "./Attachments"
 import { DrivePickerDialog } from "./DrivePicker";
 import { DebugPanel, type DebugInfo } from "./DebugPanel";
 import { SettingsDialog, loadSettings, type VoidSettings } from "./Settings";
-import { ingestDocument } from "@/server/documents.functions";
+import { ingestDocument } from "@/lib/documents.functions";
 import {
   Plus, Send, Sparkles, MessageSquare, Trash2, FolderOpen, User2, Bot, Copy, RotateCcw, Edit2, Search, X, Check, Clock, Zap, Globe, BookOpen, Brain,
 } from "lucide-react";
