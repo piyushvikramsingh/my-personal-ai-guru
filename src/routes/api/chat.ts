@@ -237,7 +237,8 @@ export const Route = createFileRoute("/api/chat")({
         }
 
         // Build OpenAI-style messages with multimodal content
-        const aiMessages: any[] = [{ role: "system", content: SYSTEM }];
+        const systemContent = (body.systemPrompt && body.systemPrompt.trim()) || SYSTEM;
+        const aiMessages: any[] = [{ role: "system", content: systemContent }];
         
         // Get last user message for research context
         const lastUserMsg = [...body.messages].reverse().find(m => m.role === "user");
@@ -281,7 +282,7 @@ export const Route = createFileRoute("/api/chat")({
           method: "POST",
           headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
           body: JSON.stringify({
-            model: "google/gemini-2.5-pro",
+            model: body.model || "google/gemini-2.5-pro",
             messages: aiMessages,
             stream: true,
             reasoning: { effort: "medium" },
