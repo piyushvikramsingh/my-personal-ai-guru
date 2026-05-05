@@ -8,6 +8,7 @@ import { Markdown } from "./Markdown";
 import { AttachmentChip, FilePicker, type LocalAttachment } from "./Attachments";
 import { DrivePickerDialog } from "./DrivePicker";
 import { DebugPanel, type DebugInfo } from "./DebugPanel";
+import { SettingsDialog, loadSettings, type VoidSettings } from "./Settings";
 import { ingestDocument } from "@/server/documents.functions";
 import {
   Plus, Send, Sparkles, MessageSquare, Trash2, FolderOpen, User2, Bot, Copy, RotateCcw, Edit2, Search, X, Check, Clock, Zap, Globe, BookOpen, Brain,
@@ -37,6 +38,7 @@ export function ChatApp() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState("");
   const [debug, setDebug] = useState<DebugInfo>({});
+  const [settings, setSettings] = useState<VoidSettings>(() => loadSettings());
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // AuthGate guarantees a session before this component mounts.
@@ -171,6 +173,8 @@ export function ChatApp() {
       const payload = {
         conversationId: convId,
         documentIds,
+        model: settings.model,
+        systemPrompt: settings.systemPrompt,
         messages: [
           ...messages.map((m) => ({ role: m.role, content: m.content })),
           { role: "user" as const, content: text, attachments: sentAttachments.map((a) => ({
@@ -359,10 +363,11 @@ export function ChatApp() {
 
       {/* Chat */}
       <main className="flex-1 flex flex-col min-w-0">
-        <header className="border-b border-border/50 px-8 py-4 bg-background">
-          <h1 className="text-base font-semibold tracking-tight">
+        <header className="border-b border-border/50 px-8 py-4 bg-background flex items-center justify-between gap-4">
+          <h1 className="text-base font-semibold tracking-tight truncate">
             {convs.find((c) => c.id === activeId)?.title || "New chat"}
           </h1>
+          <SettingsDialog settings={settings} onChange={setSettings} />
         </header>
 
         <div ref={scrollRef} className="flex-1 overflow-y-auto scroll-smooth">
