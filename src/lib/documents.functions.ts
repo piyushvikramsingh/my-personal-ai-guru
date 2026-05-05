@@ -1,7 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
 const MAX_BYTES = 8 * 1024 * 1024;
 const CHUNK_SIZE = 1200;
@@ -78,6 +77,7 @@ export const ingestDocument = createServerFn({ method: "POST" })
   }).parse(d))
   .handler(async ({ data, context }) => {
     const { userId } = context;
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
     const { data: doc, error: docErr } = await supabaseAdmin
       .from("documents")
