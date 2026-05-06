@@ -542,6 +542,7 @@ function Bubble({ m, delay = 0 }: { m: DBMessage; delay?: number }) {
         {isUser ? <User2 className="size-4" /> : <VoidMark className="size-4" />}
       </div>
       <div className="flex-1 min-w-0 pt-0.5">
+        <div className="text-[11px] text-muted-foreground mb-1 font-medium">{isUser ? "You" : "void"}</div>
         {m.attachments?.length > 0 && (
           <div className="flex flex-wrap gap-2 mb-3">
             {m.attachments.map((a, i) => (
@@ -550,20 +551,16 @@ function Bubble({ m, delay = 0 }: { m: DBMessage; delay?: number }) {
           </div>
         )}
         <div className="flex gap-2 items-start">
-          <div className="flex-1">
+          <div className="flex-1 min-w-0">
             {m.content && <Markdown content={m.content} />}
-            <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
-              <Clock className="size-3" />
-              <span>{time}</span>
-            </div>
           </div>
           {!isUser && m.content && showActions && (
             <button
               onClick={handleCopy}
-              className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-white transition-all p-1 hover:bg-white/10 rounded"
-              title="Copy message"
+              className="text-muted-foreground hover:text-white transition-colors p-1.5 hover:bg-white/5 rounded-md"
+              title="Copy"
             >
-              <Copy className="size-4" />
+              <Copy className="size-3.5" />
             </button>
           )}
         </div>
@@ -572,115 +569,46 @@ function Bubble({ m, delay = 0 }: { m: DBMessage; delay?: number }) {
   );
 }
 
-function EmptyState() {
-  const capabilities = [
-    {
-      icon: Globe,
-      title: "Research & Analysis",
-      prompts: [
-        "Search for the latest trends in AI and summarize key findings",
-        "Analyze this YouTube video and give me the main takeaways",
-        "Compare iPhone 15 and Samsung Galaxy S24 specifications",
-      ],
-    },
-    {
-      icon: Brain,
-      title: "Logical Thinking",
-      prompts: [
-        "Explain complex topics in simple terms with examples",
-        "Help me break down this problem into actionable steps",
-        "Analyze this dataset and identify patterns or anomalies",
-      ],
-    },
-    {
-      icon: BookOpen,
-      title: "Content Processing",
-      prompts: [
-        "Summarize this research paper in bullet points",
-        "Extract key insights from this document",
-        "Translate and explain technical content",
-      ],
-    },
-  ];
-
-  const shortcuts = [
-    { key: "Enter", action: "Send message" },
-    { key: "Shift + Enter", action: "New line" },
-    { key: "Cmd + K", action: "Search conversations" },
+function EmptyState({ onPick }: { onPick: (p: string) => void }) {
+  const suggestions = [
+    { icon: Code2, label: "Code", prompt: "Review this function and suggest improvements" },
+    { icon: PenLine, label: "Write", prompt: "Draft a concise launch announcement for a new product" },
+    { icon: Lightbulb, label: "Brainstorm", prompt: "Give me 10 unconventional ideas for weekend projects" },
+    { icon: BookOpen, label: "Summarize", prompt: "Summarize this document into 5 key bullet points" },
+    { icon: Brain, label: "Reason", prompt: "Walk me through solving a tricky logic puzzle step by step" },
+    { icon: Globe, label: "Research", prompt: "Compare the latest open-source LLMs released this year" },
   ];
 
   return (
-    <div className="text-center py-12 px-4">
-      <div className="inline-flex size-16 rounded-3xl bg-white items-center justify-center mb-6 shadow-lg">
-        <Sparkles className="size-8 text-black" />
+    <div className="py-16 px-2">
+      <div className="flex items-center justify-center gap-3 mb-4">
+        <VoidMark className="size-8 text-white" />
       </div>
-      
-      <h2 className="text-4xl font-bold tracking-tight mb-2">How can I help you today?</h2>
-      <p className="text-base text-muted-foreground mb-12 max-w-2xl mx-auto">
-        Nova AI is your intelligent assistant for research, analysis, and content processing. Ask anything and get instant insights.
+      <h2 className="text-3xl md:text-[34px] font-semibold tracking-[-0.02em] text-center mb-2 text-white">
+        What's on your mind?
+      </h2>
+      <p className="text-[14px] text-muted-foreground text-center mb-10 max-w-md mx-auto">
+        A quiet, thoughtful AI. Ask anything, attach files, or pick a starting point below.
       </p>
 
-      <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto mb-12">
-        {capabilities.map((cap) => {
-          const IconComponent = cap.icon;
-          return (
-            <div key={cap.title} className="text-left">
-              <div className="flex items-center gap-2 mb-4">
-                <div className="p-2 rounded-lg bg-white/10 border border-white/20">
-                  <IconComponent className="size-5 text-white" />
-                </div>
-                <h3 className="font-semibold text-white">{cap.title}</h3>
-              </div>
-              <div className="space-y-2">
-                {cap.prompts.map((prompt) => (
-                  <div
-                    key={prompt}
-                    className="rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-xs text-white/80 text-left hover:bg-white/10 hover:border-white/20 transition-all duration-200 cursor-pointer hover:shadow-md"
-                  >
-                    {prompt}
-                  </div>
-                ))}
-              </div>
-            </div>
-          );
-        })}
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-w-2xl mx-auto">
+        {suggestions.map((s) => (
+          <button
+            key={s.label}
+            onClick={() => onPick(s.prompt)}
+            className="group flex flex-col gap-2 text-left p-4 rounded-xl border border-border/60 bg-card/40 hover:bg-card hover:border-white/20 transition-all"
+          >
+            <s.icon className="size-4 text-white/70 group-hover:text-white transition-colors" />
+            <div className="text-[13px] font-medium text-white">{s.label}</div>
+            <div className="text-[11.5px] text-muted-foreground line-clamp-2 leading-relaxed">{s.prompt}</div>
+          </button>
+        ))}
       </div>
 
-      <div className="max-w-2xl mx-auto">
-        <div className="mb-8 p-6 rounded-xl border border-white/10 bg-white/5">
-          <div className="flex items-center gap-2 mb-4 justify-center">
-            <Zap className="size-4 text-white" />
-            <p className="text-sm font-semibold text-white">Key Features</p>
-          </div>
-          <div className="grid sm:grid-cols-2 gap-4 text-left">
-            <div className="flex items-start gap-2">
-              <Globe className="size-4 text-white/60 mt-1 shrink-0" />
-              <span className="text-sm text-white/80">Web search & data extraction</span>
-            </div>
-            <div className="flex items-start gap-2">
-              <Brain className="size-4 text-white/60 mt-1 shrink-0" />
-              <span className="text-sm text-white/80">Analytical reasoning</span>
-            </div>
-            <div className="flex items-start gap-2">
-              <Copy className="size-4 text-white/60 mt-1 shrink-0" />
-              <span className="text-sm text-white/80">Multi-source comparison</span>
-            </div>
-            <div className="flex items-start gap-2">
-              <BookOpen className="size-4 text-white/60 mt-1 shrink-0" />
-              <span className="text-sm text-white/80">Document analysis</span>
-            </div>
-          </div>
-        </div>
-
-        <p className="text-xs font-semibold text-muted-foreground mb-3 uppercase">Keyboard Shortcuts</p>
-        <div className="space-y-2">
-          {shortcuts.map((s) => (
-            <div key={s.key} className="flex items-center justify-between text-xs border border-white/10 rounded-lg p-2 bg-white/5 hover:bg-white/10 transition-colors">
-              <span className="text-white/80">{s.action}</span>
-              <kbd className="px-2 py-1 bg-white text-black rounded font-mono text-[10px] font-semibold">{s.key}</kbd>
-            </div>
-          ))}
-        </div>
+      <div className="flex items-center justify-center gap-4 mt-10 text-[11px] text-muted-foreground/70">
+        <span className="flex items-center gap-1.5"><kbd className="px-1.5 py-0.5 bg-white/5 border border-border/60 rounded font-mono text-[10px]">↵</kbd> Send</span>
+        <span className="flex items-center gap-1.5"><kbd className="px-1.5 py-0.5 bg-white/5 border border-border/60 rounded font-mono text-[10px]">⇧↵</kbd> New line</span>
+        <span className="flex items-center gap-1.5"><Paperclip className="size-3" /> Attach</span>
       </div>
     </div>
   );
