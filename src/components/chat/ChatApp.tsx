@@ -296,116 +296,143 @@ export function ChatApp() {
   };
 
   return (
-    <div className="h-screen flex bg-background text-foreground">
+    <div className="h-screen flex bg-background text-foreground selection:bg-white selection:text-black">
       {/* Sidebar */}
-      <aside className="w-70 shrink-0 border-r border-border bg-sidebar text-sidebar-foreground flex flex-col">
-        <div className="p-4 flex items-center gap-3 border-b border-border/50">
-          <div className="size-9 rounded-xl bg-white flex items-center justify-center shadow-md">
-            <Sparkles className="size-5 text-black" />
-          </div>
-          <span className="font-bold text-lg tracking-tight">Nova</span>
+      <aside className="w-72 shrink-0 border-r border-border/60 bg-sidebar text-sidebar-foreground flex flex-col">
+        <div className="px-5 pt-5 pb-3 flex items-center gap-2.5">
+          <VoidMark className="size-5 text-white" />
+          <span className="font-semibold text-[15px] tracking-[-0.01em]">void</span>
+          <span className="ml-auto text-[10px] uppercase tracking-[0.14em] text-muted-foreground/80 font-medium">v1.0</span>
         </div>
-        <div className="px-3 py-4">
-          <Button onClick={newChat} className="w-full justify-start gap-2 bg-white text-black hover:bg-gray-200 rounded-xl h-10 transition-all duration-200" variant="ghost">
-            <Plus className="size-4" /> New chat
+
+        <div className="px-3 pt-2">
+          <Button
+            onClick={newChat}
+            className="w-full justify-between gap-2 bg-white text-black hover:bg-neutral-200 rounded-lg h-9 font-medium text-[13px] shadow-none"
+          >
+            <span className="flex items-center gap-2"><Plus className="size-3.5" /> New chat</span>
+            <kbd className="text-[10px] font-mono text-black/50 bg-black/5 px-1.5 py-0.5 rounded">⌘N</kbd>
           </Button>
         </div>
-        <div className="px-3 py-2">
+
+        <div className="px-3 py-3">
           <div className="relative">
-            <Search className="absolute left-3 top-2.5 size-4 text-muted-foreground" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
             <input
               type="text"
-              placeholder="Search chats…"
+              placeholder="Search"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-card border border-border rounded-lg px-3 py-2 pl-9 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-white"
+              className="w-full bg-transparent border border-border/60 rounded-lg pl-9 pr-3 h-9 text-[13px] placeholder:text-muted-foreground/70 focus:outline-none focus:border-white/40 transition-colors"
             />
           </div>
         </div>
+
         <ScrollArea className="flex-1">
-          <div className="px-2 space-y-1">
-            {convs.filter((c) => c.title.toLowerCase().includes(searchQuery.toLowerCase())).map((c, idx) => (
-              <div
-                key={c.id}
-                className={`group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm cursor-pointer transition-all duration-200 ${
-                  activeId === c.id 
-                    ? "bg-white text-black border border-white shadow-md" 
-                    : "text-sidebar-foreground hover:bg-sidebar-accent/70 hover:shadow-sm"
-                }`}
-                onClick={() => setActiveId(c.id)}
-                style={{ animationDelay: `${idx * 30}ms` }}
-              >
-                {editingId === c.id ? (
-                  <>
-                    <input
-                      autoFocus
-                      type="text"
-                      value={editTitle}
-                      onChange={(e) => setEditTitle(e.target.value)}
-                      className="flex-1 bg-card border border-white rounded px-2 py-1 text-sm text-foreground focus:outline-none"
-                      onClick={(e) => e.stopPropagation()}
-                    />
-                    <button onClick={(e) => { e.stopPropagation(); renameConv(c.id, editTitle); }} className="text-white hover:scale-110">
-                      <Check className="size-3.5" />
-                    </button>
-                    <button onClick={(e) => { e.stopPropagation(); setEditingId(null); }} className="text-muted-foreground hover:scale-110">
-                      <X className="size-3.5" />
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <MessageSquare className="size-4 shrink-0" />
-                    <span className="truncate flex-1 font-medium">{c.title || "New chat"}</span>
-                    <button
-                      className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-white transition-all duration-150 hover:scale-110"
-                      onClick={(e) => { e.stopPropagation(); setEditingId(c.id); setEditTitle(c.title); }}
-                    >
-                      <Edit2 className="size-3.5" />
-                    </button>
-                    <button
-                      className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all duration-150 hover:scale-110"
-                      onClick={(e) => { e.stopPropagation(); deleteConv(c.id); }}
-                    >
-                      <Trash2 className="size-3.5" />
-                    </button>
-                  </>
-                )}
-              </div>
-            ))}
+          <div className="px-2 pb-3">
+            {(() => {
+              const filtered = convs.filter((c) => c.title.toLowerCase().includes(searchQuery.toLowerCase()));
+              const groups = groupByDate(filtered);
+              const order = ["Today", "Yesterday", "Previous 7 days", "Older"];
+              return order.map((label) => groups[label].length === 0 ? null : (
+                <div key={label} className="mb-3">
+                  <div className="px-3 pb-1.5 pt-2 text-[10px] uppercase tracking-[0.12em] text-muted-foreground/70 font-medium">{label}</div>
+                  <div className="space-y-0.5">
+                    {groups[label].map((c) => (
+                      <div
+                        key={c.id}
+                        className={`group flex items-center gap-2 rounded-lg px-3 h-9 text-[13px] cursor-pointer transition-colors ${
+                          activeId === c.id
+                            ? "bg-white/[0.08] text-white"
+                            : "text-sidebar-foreground/80 hover:bg-white/[0.04] hover:text-white"
+                        }`}
+                        onClick={() => setActiveId(c.id)}
+                      >
+                        {editingId === c.id ? (
+                          <>
+                            <input
+                              autoFocus
+                              type="text"
+                              value={editTitle}
+                              onChange={(e) => setEditTitle(e.target.value)}
+                              className="flex-1 bg-transparent border border-white/30 rounded px-2 py-0.5 text-[13px] focus:outline-none"
+                              onClick={(e) => e.stopPropagation()}
+                              onKeyDown={(e) => { if (e.key === "Enter") renameConv(c.id, editTitle); if (e.key === "Escape") setEditingId(null); }}
+                            />
+                            <button onClick={(e) => { e.stopPropagation(); renameConv(c.id, editTitle); }} className="text-white/70 hover:text-white">
+                              <Check className="size-3.5" />
+                            </button>
+                            <button onClick={(e) => { e.stopPropagation(); setEditingId(null); }} className="text-muted-foreground hover:text-white">
+                              <X className="size-3.5" />
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <span className={`size-1.5 rounded-full shrink-0 ${activeId === c.id ? "bg-white" : "bg-white/30"}`} />
+                            <span className="truncate flex-1">{c.title || "New chat"}</span>
+                            <button
+                              className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-white transition-opacity"
+                              onClick={(e) => { e.stopPropagation(); setEditingId(c.id); setEditTitle(c.title); }}
+                            >
+                              <Edit2 className="size-3" />
+                            </button>
+                            <button
+                              className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity"
+                              onClick={(e) => { e.stopPropagation(); deleteConv(c.id); }}
+                            >
+                              <Trash2 className="size-3" />
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ));
+            })()}
             {convs.length === 0 && (
-              <p className="px-3 py-4 text-xs text-muted-foreground text-center">No conversations yet.</p>
+              <p className="px-4 py-6 text-xs text-muted-foreground/70 text-center">No conversations yet</p>
             )}
           </div>
         </ScrollArea>
-        <div className="border-t border-border/50 p-4 flex items-center gap-3">
-          <div className="size-8 rounded-full bg-white flex items-center justify-center border border-white">
-            <User2 className="size-4 text-black" />
+
+        <div className="border-t border-border/60 p-3 flex items-center gap-2.5">
+          <div className="size-7 rounded-full bg-white/10 border border-white/15 flex items-center justify-center">
+            <User2 className="size-3.5 text-white" />
           </div>
-          <span className="text-xs font-medium truncate flex-1">Guest User</span>
+          <div className="flex-1 min-w-0">
+            <div className="text-[12px] font-medium truncate">{userEmail || "Guest"}</div>
+            <div className="text-[10px] text-muted-foreground">{userEmail ? "Signed in" : "Anonymous session"}</div>
+          </div>
         </div>
       </aside>
 
       {/* Chat */}
       <main className="flex-1 flex flex-col min-w-0">
-        <header className="border-b border-border/50 px-8 py-4 bg-background flex items-center justify-between gap-4">
-          <h1 className="text-base font-semibold tracking-tight truncate">
-            {convs.find((c) => c.id === activeId)?.title || "New chat"}
-          </h1>
-          <SettingsDialog settings={settings} onChange={setSettings} />
+        <header className="border-b border-border/60 px-6 py-3 bg-background/80 backdrop-blur flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2 min-w-0">
+            <h1 className="text-[14px] font-medium tracking-tight truncate text-white/90">
+              {convs.find((c) => c.id === activeId)?.title || "New chat"}
+            </h1>
+          </div>
+          <div className="flex items-center gap-2">
+            <SettingsDialog settings={settings} onChange={setSettings} />
+          </div>
         </header>
 
         <div ref={scrollRef} className="flex-1 overflow-y-auto scroll-smooth">
-          <div className="max-w-2xl mx-auto px-6 py-10 space-y-6">
+          <div className="max-w-3xl mx-auto px-6 py-10 space-y-8">
             {messages.length === 0 && !streaming && (
-              <EmptyState />
+              <EmptyState onPick={(p) => setInput(p)} />
             )}
-            {messages.map((m, idx) => <Bubble key={m.id} m={m} delay={idx * 50} />)}
+            {messages.map((m, idx) => <Bubble key={m.id} m={m} delay={idx * 40} />)}
             {streaming && (
               <div className="flex gap-4 animate-fadeInUp">
-                <div className="size-9 shrink-0 rounded-full bg-white flex items-center justify-center shadow-md">
-                  <Bot className="size-5 text-black" />
+                <div className="size-8 shrink-0 rounded-full bg-white text-black flex items-center justify-center">
+                  <VoidMark className="size-4" />
                 </div>
-                <div className="flex-1 pt-1">
+                <div className="flex-1 pt-0.5 min-w-0">
+                  <div className="text-[11px] text-muted-foreground mb-1 font-medium">void</div>
                   <div className={busy && !streaming ? "" : "cursor-blink"}>
                     <Markdown content={streaming} />
                   </div>
@@ -414,20 +441,20 @@ export function ChatApp() {
             )}
             {busy && !streaming && (
               <div className="flex gap-4 animate-fadeInUp">
-                <div className="size-9 shrink-0 rounded-full bg-black border border-white flex items-center justify-center shadow-md">
-                  <Bot className="size-5 text-white" />
+                <div className="size-8 shrink-0 rounded-full bg-white text-black flex items-center justify-center">
+                  <VoidMark className="size-4" />
                 </div>
-                <div className="flex items-center gap-2 text-muted-foreground text-sm pt-1">
-                  <span className="size-2 rounded-full bg-current animate-pulse" />
-                  <span className="size-2 rounded-full bg-current animate-pulse" style={{ animationDelay: "150ms" }} />
-                  <span className="size-2 rounded-full bg-current animate-pulse" style={{ animationDelay: "300ms" }} />
+                <div className="flex items-center gap-1.5 text-muted-foreground pt-2">
+                  <span className="size-1.5 rounded-full bg-current animate-pulse" />
+                  <span className="size-1.5 rounded-full bg-current animate-pulse" style={{ animationDelay: "150ms" }} />
+                  <span className="size-1.5 rounded-full bg-current animate-pulse" style={{ animationDelay: "300ms" }} />
                 </div>
               </div>
             )}
             {messages.length > 0 && messages[messages.length - 1].role === "assistant" && !streaming && !busy && (
-              <div className="flex justify-center pt-4">
-                <Button onClick={regenerateResponse} className="gap-2 bg-white text-black hover:bg-gray-200" variant="outline" size="sm">
-                  <RotateCcw className="size-3.5" /> Regenerate response
+              <div className="flex justify-center pt-2">
+                <Button onClick={regenerateResponse} className="gap-2 bg-transparent border border-border/60 text-muted-foreground hover:bg-white/5 hover:text-white" variant="outline" size="sm">
+                  <RotateCcw className="size-3.5" /> Regenerate
                 </Button>
               </div>
             )}
@@ -435,10 +462,10 @@ export function ChatApp() {
         </div>
 
         {/* Composer */}
-        <div className="border-t border-border/50 bg-background pt-6">
-          <div className="max-w-2xl mx-auto px-6 pb-6">
+        <div className="bg-background pt-2">
+          <div className="max-w-3xl mx-auto px-6 pb-5">
             {attachments.length > 0 && (
-              <div className="flex flex-wrap gap-2 mb-3">
+              <div className="flex flex-wrap gap-2 mb-2">
                 {attachments.map((a, i) => (
                   <AttachmentChip
                     key={i} a={a}
@@ -447,29 +474,35 @@ export function ChatApp() {
                 ))}
               </div>
             )}
-            <div className="rounded-2xl border border-border bg-card focus-within:ring-2 focus-within:ring-white focus-within:border-white transition-all duration-200 shadow-lg">
+            <div className="rounded-2xl border border-border/60 bg-card/60 focus-within:border-white/30 focus-within:bg-card transition-all duration-150 shadow-[0_8px_24px_-12px_rgba(0,0,0,0.6)]">
               <Textarea
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={onKeyDown}
-                placeholder="Ask anything, or attach files to analyze…"
+                placeholder="Message void…"
                 rows={1}
-                className="resize-none border-0 bg-transparent focus-visible:ring-0 max-h-48 px-5 py-4 shadow-none placeholder:text-muted-foreground/60"
+                className="resize-none border-0 bg-transparent focus-visible:ring-0 max-h-48 px-5 pt-4 pb-2 shadow-none placeholder:text-muted-foreground/60 text-[14px]"
               />
-              <div className="flex items-center justify-between px-3 pb-3">
-                <div className="flex items-center gap-1">
+              <div className="flex items-center justify-between px-2.5 pb-2.5">
+                <div className="flex items-center gap-0.5">
                   <FilePicker onPick={(a) => setAttachments((arr) => [...arr, a])} />
-                  <Button variant="ghost" size="icon" type="button" title="Pick from Google Drive" onClick={() => setDriveOpen(true)} className="hover:bg-white/10 hover:text-white transition-colors">
+                  <Button variant="ghost" size="icon" type="button" title="Pick from Google Drive" onClick={() => setDriveOpen(true)} className="size-8 hover:bg-white/5 text-muted-foreground hover:text-white">
                     <FolderOpen className="size-4" />
                   </Button>
                 </div>
-                <Button onClick={send} disabled={busy || (!input.trim() && attachments.length === 0)} size="sm" className="gap-1.5 bg-white text-black hover:bg-gray-200 disabled:opacity-50 disabled:hover:bg-white">
-                  <Send className="size-3.5" /> Send
+                <Button
+                  onClick={send}
+                  disabled={busy || (!input.trim() && attachments.length === 0)}
+                  size="icon"
+                  className="size-8 rounded-lg bg-white text-black hover:bg-neutral-200 disabled:bg-white/20 disabled:text-white/40 disabled:hover:bg-white/20"
+                  title="Send"
+                >
+                  <ArrowUp className="size-4" />
                 </Button>
               </div>
             </div>
-            <p className="text-[11px] text-muted-foreground mt-2 text-center">
-              Nova can analyze images, PDFs, code, and text files. 8MB max per file.
+            <p className="text-[11px] text-muted-foreground/70 mt-2.5 text-center">
+              void may produce inaccurate information. Verify important details.
             </p>
           </div>
         </div>
@@ -488,26 +521,25 @@ export function ChatApp() {
 function Bubble({ m, delay = 0 }: { m: DBMessage; delay?: number }) {
   const isUser = m.role === "user";
   const [showActions, setShowActions] = useState(false);
-  const time = new Date(m.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  
+
   const handleCopy = () => {
     navigator.clipboard.writeText(m.content);
-    toast.success("Copied to clipboard!");
+    toast.success("Copied");
   };
 
   return (
-    <div 
+    <div
       className="flex gap-4 animate-fadeInUp group"
       style={{ animationDelay: `${delay}ms` }}
       onMouseEnter={() => setShowActions(true)}
       onMouseLeave={() => setShowActions(false)}
     >
-      <div className={`size-9 shrink-0 rounded-full flex items-center justify-center shadow-md ${
-        isUser 
-          ? "bg-white border border-white" 
-          : "bg-black border border-white"
+      <div className={`size-8 shrink-0 rounded-full flex items-center justify-center ${
+        isUser
+          ? "bg-white/10 border border-white/15 text-white"
+          : "bg-white text-black"
       }`}>
-        {isUser ? <User2 className="size-5 text-black" /> : <Bot className="size-5 text-white" />}
+        {isUser ? <User2 className="size-4" /> : <VoidMark className="size-4" />}
       </div>
       <div className="flex-1 min-w-0 pt-0.5">
         {m.attachments?.length > 0 && (
