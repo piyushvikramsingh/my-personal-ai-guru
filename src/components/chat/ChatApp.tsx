@@ -11,8 +11,32 @@ import { DebugPanel, type DebugInfo } from "./DebugPanel";
 import { SettingsDialog, loadSettings, type VoidSettings } from "./Settings";
 import { ingestDocument } from "@/lib/documents.functions";
 import {
-  Plus, Send, Sparkles, MessageSquare, Trash2, FolderOpen, User2, Bot, Copy, RotateCcw, Edit2, Search, X, Check, Clock, Zap, Globe, BookOpen, Brain,
+  Plus, Send, MessageSquare, Trash2, FolderOpen, User2, Copy, RotateCcw, Edit2, Search, X, Check, Globe, BookOpen, Brain, Code2, PenLine, Lightbulb, ArrowUp, Paperclip, Command,
 } from "lucide-react";
+
+// Minimal void mark — a precise, geometric "•" inside a ring. Feels like a real brand.
+function VoidMark({ className = "size-5" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden>
+      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="1.5" />
+      <circle cx="12" cy="12" r="3.25" fill="currentColor" />
+    </svg>
+  );
+}
+
+function groupByDate(convs: Conversation[]) {
+  const now = Date.now();
+  const day = 86400000;
+  const buckets: Record<string, Conversation[]> = { Today: [], Yesterday: [], "Previous 7 days": [], Older: [] };
+  for (const c of convs) {
+    const age = now - new Date(c.updated_at).getTime();
+    if (age < day) buckets.Today.push(c);
+    else if (age < 2 * day) buckets.Yesterday.push(c);
+    else if (age < 7 * day) buckets["Previous 7 days"].push(c);
+    else buckets.Older.push(c);
+  }
+  return buckets;
+}
 
 type Conversation = { id: string; title: string; updated_at: string };
 type DBMessage = {
