@@ -67,9 +67,13 @@ export function ChatApp() {
   const [settings, setSettings] = useState<VoidSettings>(() => loadSettings());
   const [autoSpeakOn, setAutoSpeakOn] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const sendRef = useRef<() => void>(() => {});
   const voice = useSpeechRecognition((text, isFinal) => {
     setInput(text);
-    if (isFinal) setTimeout(() => { /* user can press send */ }, 0);
+    if (isFinal && text.trim()) {
+      // auto-submit on final transcript (push-to-talk)
+      setTimeout(() => sendRef.current?.(), 50);
+    }
   });
   useEffect(() => { setAutoSpeakOn(getAutoSpeak()); }, []);
 
