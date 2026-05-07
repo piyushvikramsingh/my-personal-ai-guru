@@ -426,6 +426,15 @@ export function ChatApp() {
             </h1>
           </div>
           <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => { const v = !autoSpeakOn; setAutoSpeakOn(v); setAutoSpeak(v); if (!v) stopSpeaking(); }}
+              title={autoSpeakOn ? "Voice replies on" : "Voice replies off"}
+              className="size-8 hover:bg-white/5 text-muted-foreground hover:text-white"
+            >
+              {autoSpeakOn ? <Volume2 className="size-4" /> : <VolumeX className="size-4" />}
+            </Button>
             <SettingsDialog settings={settings} onChange={setSettings} />
           </div>
         </header>
@@ -496,6 +505,18 @@ export function ChatApp() {
               <div className="flex items-center justify-between px-2.5 pb-2.5">
                 <div className="flex items-center gap-0.5">
                   <FilePicker onPick={(a) => setAttachments((arr) => [...arr, a])} />
+                  {voice.supported && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      type="button"
+                      title={voice.listening ? "Stop listening" : "Talk to void"}
+                      onClick={voice.toggle}
+                      className={`size-8 hover:bg-white/5 ${voice.listening ? "text-red-400 animate-pulse" : "text-muted-foreground hover:text-white"}`}
+                    >
+                      {voice.listening ? <MicOff className="size-4" /> : <Mic className="size-4" />}
+                    </Button>
+                  )}
                   <Button variant="ghost" size="icon" type="button" title="Pick from Google Drive" onClick={() => setDriveOpen(true)} className="size-8 hover:bg-white/5 text-muted-foreground hover:text-white">
                     <FolderOpen className="size-4" />
                   </Button>
