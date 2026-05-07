@@ -9,14 +9,23 @@ import { AttachmentChip, FilePicker, type LocalAttachment } from "./Attachments"
 import { DrivePickerDialog } from "./DrivePicker";
 import { DebugPanel, type DebugInfo } from "./DebugPanel";
 import { SettingsDialog, loadSettings, type VoidSettings } from "./Settings";
+import { VoiceStatusIndicator } from "./VoiceStatusIndicator";
+import { TranscriptPreview } from "./TranscriptPreview";
+import { MessageTTS } from "./MessageTTS";
+import { VoiceSessionLog } from "./VoiceSessionLog";
+import { ActionConfirmDialog, type IntegrationAction } from "./ActionConfirmDialog";
 import { ingestDocument } from "@/lib/documents.functions";
 import {
-  Plus, Send, MessageSquare, Trash2, FolderOpen, User2, Copy, RotateCcw, Edit2, Search, X, Check, Globe, BookOpen, Brain, Code2, PenLine, Lightbulb, ArrowUp, Paperclip, Command, Mic, MicOff, Volume2, VolumeX,
+  useSpeechRecognition, speakMessage, stopTTS, getAutoSpeak, setAutoSpeak,
+  getTTSSpeed, getVoiceHotkey, type VoiceStatus,
+} from "@/hooks/use-voice";
+import {
+  Plus, Send, MessageSquare, Trash2, FolderOpen, User2, Copy, RotateCcw,
+  Edit2, Search, X, Check, Globe, BookOpen, Brain, Code2, PenLine, Lightbulb,
+  ArrowUp, Paperclip, Mic, MicOff, Volume2, VolumeX,
 } from "lucide-react";
 import { NavRail } from "@/components/NavRail";
-import { useSpeechRecognition, speak, stopSpeaking, getAutoSpeak, setAutoSpeak } from "@/hooks/use-voice";
 
-// Minimal void mark — a precise, geometric "•" inside a ring. Feels like a real brand.
 function VoidMark({ className = "size-5" }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden>
@@ -49,6 +58,38 @@ type DBMessage = {
   created_at: string;
 };
 
+// Detect integration action intents in AI responses
+function detectIntegrationAction(text: string): IntegrationAction | null {
+  const lower = text.toLowerCase();
+  // Gmail send intent
+  if ((lower.includes("send email") || lower.includes("draft email") || lower.includes("compose email")) &&
+    (lower.includes("to:") || lower.includes("subject:") || text.match(/\*\*To:\*\*/i))) {
+    const toMatch = text.match(/(?:\*\*)?To:(?:\*\*)?\s*([^\n]+)/i);
+    const subjectMatch = text.match(/(?:\*\*)?Subject:(?:\*\*)?\s*([^\n]+)/i);
+    const bodyMatch = text.match(/(?:\*\*)?Body:(?:\*\*)?\s*([\s\S]+?)(?=\n\n|$)/i);
+    return {
+      type: "email",
+      to: toMatch?.[1]?.trim() ?? "",
+      subject: subjectMatch?.[1]?.trim() ?? "Message from void",
+      body: bodyMatch?.[1]?.trim() ?? text,
+    };
+  }
+  // Calendar intent
+  if ((lower.includes("create event") || lower.includes("schedule meeting") || lower.includes("add to calendar")) &&
+    (lower.includes("title:") || text.match(/\*\*Title:\*\*/i))) {
+    const titleMatch = text.match(/(?:\*\*)?Title:(?:\*\*)?\s*([^\n]+)/i);
+    const timeMatch = text.match(/(?:\*\*)?(?:When|Time|Start):(?:\*\*)?\s*([^\n]+)/i);
+    const descMatch = text.match(/(?:\*\*)?(?:Description|Body|Details):(?:\*\*)?\s*([\s\S]+?)(?=\n\n|$)/i);
+    return {
+      type: "calendar",
+      title: titleMatch?.[1]?.trim() ?? "New Event",
+      startTime: timeMatch?.[1]?.trim() ?? "",
+      body: descMatch?.[1]?.trim() ?? "",
+    };
+  }
+  return null;
+}
+
 export function ChatApp() {
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
@@ -64,20 +105,45 @@ export function ChatApp() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState("");
   const [debug, setDebug] = useState<DebugInfo>({});
-  const [settings, setSettings] = useState<VoidSettings>(() => loadSettings());
-  const [autoSpeakOn, setAutoSpeakOn] = useState(false);
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const sendRef = useRef<() => void>(() => {});
-  const voice = useSpeechRecognition((text, isFinal) => {
-    setInput(text);
-    if (isFinal && text.trim()) {
-      // auto-submit on final transcript (push-to-talk)
-      setTimeout(() => sendRef.current?.(), 50);
-    }
-  });
-  useEffect(() => { setAutoSpeakOn(getAutoSpeak()); }, []);
+  const [settings, setSettings] = useState<VoidSettings>({ model: "google/gemini-2.5-pro", systemPrompt: "" });
+  const [autoSpeakOn, setAutoSpeakOnState] = useState(false);
 
-  // AuthGate guarantees a session before this component mounts.
+  // Voice & transcript states
+  const [voiceStatus, setVoiceStatus] = useState<VoiceStatus>("idle");
+  const [pendingTranscript, setPendingTranscript] = useState<string>("");
+  const [showPreview, setShowPreview] = useState(false);
+
+  // Push-to-talk hotkey state
+  const pttKeyRef = useRef<string>(" ");
+  const pttHeldRef = useRef(false);
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Integration action confirm
+  const [pendingAction, setPendingAction] = useState<IntegrationAction | null>(null);
+
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const sendRef = useRef<(text?: string) => void>(() => {});
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const voice = useSpeechRecognition({
+    onResult: (text, isFinal) => {
+      setInput(text);
+      if (isFinal && text.trim()) {
+        setPendingTranscript(text);
+        setShowPreview(true);
+        setVoiceStatus("finalizing");
+      }
+    },
+    onStatusChange: (s) => setVoiceStatus(s),
+  });
+
+  useEffect(() => {
+    setSettings(loadSettings());
+    setAutoSpeakOnState(getAutoSpeak());
+    pttKeyRef.current = getVoiceHotkey();
+  }, []);
+
+  // AuthGate guarantees session before mount.
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       setCurrentUserId(data.session?.user?.id ?? null);
@@ -102,7 +168,6 @@ export function ChatApp() {
 
   useEffect(() => { if (currentUserId) loadConvs(); }, [currentUserId, loadConvs]);
 
-  // Load messages for active conversation
   useEffect(() => {
     if (!activeId) { setMessages([]); return; }
     supabase.from("messages")
@@ -118,6 +183,40 @@ export function ChatApp() {
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, streaming]);
+
+  // Global push-to-talk hotkey (hold to talk)
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      const hotkey = pttKeyRef.current;
+      const target = e.target as HTMLElement;
+      const isTextarea = target.tagName === "TEXTAREA" || target.tagName === "INPUT";
+      if (hotkey === " " && isTextarea) return; // don't intercept space in composer
+      if (e.key !== hotkey) return;
+      if (pttHeldRef.current) return;
+      pttHeldRef.current = true;
+      if (!voice.listening && voice.supported) {
+        voice.start();
+      }
+    };
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.key !== pttKeyRef.current) return;
+      pttHeldRef.current = false;
+      if (voice.listening) voice.stop();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("keyup", onKeyUp);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keyup", onKeyUp);
+    };
+  }, [voice]);
+
+  // Auto-pause TTS while mic is active
+  useEffect(() => {
+    if (voice.listening) {
+      stopTTS();
+    }
+  }, [voice.listening]);
 
   const newChat = async () => {
     setActiveId(null);
@@ -156,7 +255,6 @@ export function ChatApp() {
     setInput(lastUserMsg.content);
   };
 
-  // Ingest a file attachment (local or drive) into the RAG store. Returns documentId.
   const ingestAttachment = async (a: LocalAttachment, conversationId: string | null): Promise<string | null> => {
     try {
       const r = await ingestDocument({ data: {
@@ -172,14 +270,19 @@ export function ChatApp() {
     }
   };
 
-  const send = async () => {
+  const send = useCallback(async (overrideText?: string) => {
     if (busy) return;
-    const text = input.trim();
+    const text = (overrideText ?? input).trim();
     if (!text && attachments.length === 0) return;
     if (!currentUserId) {
       toast.error("Session not ready yet. Please wait a moment.");
       return;
     }
+
+    // Clear voice preview state
+    setShowPreview(false);
+    setPendingTranscript("");
+    setVoiceStatus("idle");
 
     let convId = activeId;
 
@@ -197,7 +300,6 @@ export function ChatApp() {
     setDebug((d) => ({ ...d, lastSentAt: new Date().toISOString(), lastError: null }));
 
     try {
-      // Kick off ingestion in parallel for any attachment that has text/PDF content
       const ingestable = sentAttachments.filter((a) =>
         a.text || a.mime === "application/pdf" || a.mime.startsWith("text/") || a.mime === "application/json"
       );
@@ -235,7 +337,6 @@ export function ChatApp() {
         return;
       }
 
-      // Always trust the server-provided conversation id.
       const persistedConversationId = resp.headers.get("x-conversation-id");
       if (persistedConversationId) {
         convId = persistedConversationId;
@@ -288,13 +389,25 @@ export function ChatApp() {
         ).join("\n");
       }
 
+      const assistantMsgId = crypto.randomUUID();
       const assistantMsg: DBMessage = {
-        id: crypto.randomUUID(), role: "assistant", content: finalContent, attachments: [],
+        id: assistantMsgId, role: "assistant", content: finalContent, attachments: [],
         created_at: new Date().toISOString(),
       };
       setMessages((m) => [...m, assistantMsg]);
       setStreaming("");
-      if (autoSpeakOn) speak(finalContent.replace(/```[\s\S]*?```/g, "").replace(/[#*_`>]/g, "").slice(0, 1500));
+
+      // Auto-speak (pauses if mic is active)
+      if (autoSpeakOn && !voice.listening) {
+        speakMessage(assistantMsgId, finalContent, getTTSSpeed());
+      }
+
+      // Detect integration actions and prompt for confirmation
+      const action = detectIntegrationAction(finalContent);
+      if (action) {
+        setPendingAction(action);
+      }
+
       loadConvs();
     } catch (e: any) {
       toast.error(e.message ?? "Network error");
@@ -302,13 +415,39 @@ export function ChatApp() {
     } finally {
       setBusy(false);
     }
-  };
+  }, [busy, input, attachments, currentUserId, activeId, messages, settings, autoSpeakOn, voice.listening, loadConvs]);
 
   useEffect(() => { sendRef.current = send; });
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
   };
+
+  // Transcript preview confirm
+  const handleTranscriptConfirm = useCallback((text: string) => {
+    setShowPreview(false);
+    setPendingTranscript("");
+    setInput(text);
+    setVoiceStatus("sending");
+    setTimeout(() => sendRef.current(text), 80);
+  }, []);
+
+  const handleTranscriptDiscard = useCallback(() => {
+    setShowPreview(false);
+    setPendingTranscript("");
+    setInput("");
+    setVoiceStatus("idle");
+  }, []);
+
+  const handleActionConfirm = async (action: IntegrationAction) => {
+    setPendingAction(null);
+    toast.success(`${action.type === "email" ? "Email" : action.type === "calendar" ? "Event" : "Message"} sent via integration.`);
+  };
+
+  const hotkeyLabel = (() => {
+    const k = getVoiceHotkey();
+    return k === " " ? "Space" : k || "Space";
+  })();
 
   return (
     <div className="h-screen flex bg-background text-foreground selection:bg-white selection:text-black">
@@ -423,7 +562,7 @@ export function ChatApp() {
         </div>
       </aside>
 
-      {/* Chat */}
+      {/* Chat area */}
       <main className="flex-1 flex flex-col min-w-0">
         <header className="border-b border-border/60 px-6 py-3 bg-background/80 backdrop-blur flex items-center justify-between gap-4">
           <div className="flex items-center gap-2 min-w-0">
@@ -431,12 +570,13 @@ export function ChatApp() {
               {convs.find((c) => c.id === activeId)?.title || "New chat"}
             </h1>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
+            <VoiceSessionLog />
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => { const v = !autoSpeakOn; setAutoSpeakOn(v); setAutoSpeak(v); if (!v) stopSpeaking(); }}
-              title={autoSpeakOn ? "Voice replies on" : "Voice replies off"}
+              onClick={() => { const v = !autoSpeakOn; setAutoSpeakOnState(v); setAutoSpeak(v); if (!v) stopTTS(); }}
+              title={autoSpeakOn ? "Voice replies on — click to disable" : "Voice replies off — click to enable"}
               className="size-8 hover:bg-white/5 text-muted-foreground hover:text-white"
             >
               {autoSpeakOn ? <Volume2 className="size-4" /> : <VolumeX className="size-4" />}
@@ -448,9 +588,16 @@ export function ChatApp() {
         <div ref={scrollRef} className="flex-1 overflow-y-auto scroll-smooth">
           <div className="max-w-3xl mx-auto px-6 py-10 space-y-8">
             {messages.length === 0 && !streaming && (
-              <EmptyState onPick={(p) => setInput(p)} />
+              <EmptyState onPick={(p) => setInput(p)} hotkeyLabel={hotkeyLabel} />
             )}
-            {messages.map((m, idx) => <Bubble key={m.id} m={m} delay={idx * 40} />)}
+            {messages.map((m, idx) => (
+              <Bubble
+                key={m.id}
+                m={m}
+                delay={idx * 40}
+                onCopy={copyMessage}
+              />
+            ))}
             {streaming && (
               <div className="flex gap-4 animate-fadeInUp">
                 <div className="size-8 shrink-0 rounded-full bg-white text-black flex items-center justify-center">
@@ -458,9 +605,7 @@ export function ChatApp() {
                 </div>
                 <div className="flex-1 pt-0.5 min-w-0">
                   <div className="text-[11px] text-muted-foreground mb-1 font-medium">void</div>
-                  <div className={busy && !streaming ? "" : "cursor-blink"}>
-                    <Markdown content={streaming} />
-                  </div>
+                  <Markdown content={streaming} />
                 </div>
               </div>
             )}
@@ -489,22 +634,40 @@ export function ChatApp() {
         {/* Composer */}
         <div className="bg-background pt-2">
           <div className="max-w-3xl mx-auto px-6 pb-5">
-            {voice.listening && (
-              <div className="mb-2 flex items-center gap-3 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2.5 text-[13px] text-red-200 animate-fadeInUp">
-                <span className="relative flex size-2.5">
-                  <span className="absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75 animate-ping"></span>
-                  <span className="relative inline-flex rounded-full size-2.5 bg-red-500"></span>
-                </span>
-                <span className="flex-1">Listening… speak now. Will auto-send when you pause.</span>
+            {/* Voice permission denied fallback */}
+            {voice.permissionDenied && (
+              <div className="mb-2 flex items-center gap-3 rounded-xl border border-border/60 bg-card/60 px-4 py-2.5 text-[13px] text-muted-foreground animate-fadeInUp">
+                <MicOff className="size-3.5 shrink-0" />
+                <span className="flex-1">Microphone access was denied.</span>
                 <button
-                  type="button"
-                  onClick={voice.stop}
-                  className="text-xs text-red-200/80 hover:text-white underline-offset-2 hover:underline"
+                  onClick={() => voice.reinitialize()}
+                  className="text-xs text-white/70 hover:text-white underline-offset-2 hover:underline transition-opacity"
                 >
-                  Cancel
+                  Re-initialize
                 </button>
               </div>
             )}
+
+            {/* Voice status indicator */}
+            {!showPreview && (voiceStatus === "listening" || voiceStatus === "error" || voiceStatus === "denied" || voiceStatus === "sending") && (
+              <VoiceStatusIndicator
+                status={voiceStatus}
+                transcript={input}
+                onCancel={() => { voice.stop(); setVoiceStatus("idle"); setInput(""); }}
+                onConfirm={voiceStatus === "finalizing" ? () => handleTranscriptConfirm(input) : undefined}
+              />
+            )}
+
+            {/* Transcript preview step */}
+            {showPreview && pendingTranscript && (
+              <TranscriptPreview
+                transcript={pendingTranscript}
+                onConfirm={handleTranscriptConfirm}
+                onDiscard={handleTranscriptDiscard}
+                autoSendMs={null}
+              />
+            )}
+
             {attachments.length > 0 && (
               <div className="flex flex-wrap gap-2 mb-2">
                 {attachments.map((a, i) => (
@@ -515,8 +678,10 @@ export function ChatApp() {
                 ))}
               </div>
             )}
+
             <div className="rounded-2xl border border-border/60 bg-card/60 focus-within:border-white/30 focus-within:bg-card transition-all duration-150 shadow-[0_8px_24px_-12px_rgba(0,0,0,0.6)]">
               <Textarea
+                ref={textareaRef}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={onKeyDown}
@@ -532,26 +697,40 @@ export function ChatApp() {
                       variant="ghost"
                       size="icon"
                       type="button"
-                      title={voice.listening ? "Stop listening" : "Talk to void"}
+                      title={voice.listening ? "Stop listening" : `Talk to void (hold ${hotkeyLabel})`}
                       onClick={voice.toggle}
                       className={`size-8 hover:bg-white/5 ${voice.listening ? "text-red-400 animate-pulse" : "text-muted-foreground hover:text-white"}`}
                     >
                       {voice.listening ? <MicOff className="size-4" /> : <Mic className="size-4" />}
                     </Button>
                   )}
-                  <Button variant="ghost" size="icon" type="button" title="Pick from Google Drive" onClick={() => setDriveOpen(true)} className="size-8 hover:bg-white/5 text-muted-foreground hover:text-white">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    type="button"
+                    title="Pick from Google Drive"
+                    onClick={() => setDriveOpen(true)}
+                    className="size-8 hover:bg-white/5 text-muted-foreground hover:text-white"
+                  >
                     <FolderOpen className="size-4" />
                   </Button>
                 </div>
-                <Button
-                  onClick={send}
-                  disabled={busy || (!input.trim() && attachments.length === 0)}
-                  size="icon"
-                  className="size-8 rounded-lg bg-white text-black hover:bg-neutral-200 disabled:bg-white/20 disabled:text-white/40 disabled:hover:bg-white/20"
-                  title="Send"
-                >
-                  <ArrowUp className="size-4" />
-                </Button>
+                <div className="flex items-center gap-2">
+                  {voice.supported && (
+                    <span className="text-[10px] text-muted-foreground/60 hidden sm:block">
+                      Hold <kbd className="px-1 py-0.5 rounded bg-white/5 border border-border/40 font-mono text-[9px]">{hotkeyLabel}</kbd> to talk
+                    </span>
+                  )}
+                  <Button
+                    onClick={() => send()}
+                    disabled={busy || (!input.trim() && attachments.length === 0)}
+                    size="icon"
+                    className="size-8 rounded-lg bg-white text-black hover:bg-neutral-200 disabled:bg-white/20 disabled:text-white/40 disabled:hover:bg-white/20"
+                    title="Send"
+                  >
+                    <ArrowUp className="size-4" />
+                  </Button>
+                </div>
               </div>
             </div>
             <p className="text-[11px] text-muted-foreground/70 mt-2.5 text-center">
@@ -566,19 +745,21 @@ export function ChatApp() {
         onOpenChange={setDriveOpen}
         onPick={(a) => setAttachments((arr) => [...arr, a])}
       />
+
+      <ActionConfirmDialog
+        action={pendingAction}
+        onConfirm={handleActionConfirm}
+        onCancel={() => setPendingAction(null)}
+      />
+
       {import.meta.env.DEV && <DebugPanel debug={debug} />}
     </div>
   );
 }
 
-function Bubble({ m, delay = 0 }: { m: DBMessage; delay?: number }) {
+function Bubble({ m, delay = 0, onCopy }: { m: DBMessage; delay?: number; onCopy: (c: string) => void }) {
   const isUser = m.role === "user";
   const [showActions, setShowActions] = useState(false);
-
-  const handleCopy = () => {
-    navigator.clipboard.writeText(m.content);
-    toast.success("Copied");
-  };
 
   return (
     <div
@@ -595,7 +776,12 @@ function Bubble({ m, delay = 0 }: { m: DBMessage; delay?: number }) {
         {isUser ? <User2 className="size-4" /> : <VoidMark className="size-4" />}
       </div>
       <div className="flex-1 min-w-0 pt-0.5">
-        <div className="text-[11px] text-muted-foreground mb-1 font-medium">{isUser ? "You" : "void"}</div>
+        <div className="text-[11px] text-muted-foreground mb-1 font-medium flex items-center gap-2">
+          {isUser ? "You" : "void"}
+          {!isUser && m.content && showActions && (
+            <MessageTTS msgId={m.id} content={m.content} />
+          )}
+        </div>
         {m.attachments?.length > 0 && (
           <div className="flex flex-wrap gap-2 mb-3">
             {m.attachments.map((a, i) => (
@@ -607,10 +793,10 @@ function Bubble({ m, delay = 0 }: { m: DBMessage; delay?: number }) {
           <div className="flex-1 min-w-0">
             {m.content && <Markdown content={m.content} />}
           </div>
-          {!isUser && m.content && showActions && (
+          {showActions && m.content && (
             <button
-              onClick={handleCopy}
-              className="text-muted-foreground hover:text-white transition-colors p-1.5 hover:bg-white/5 rounded-md"
+              onClick={() => onCopy(m.content)}
+              className="text-muted-foreground hover:text-white transition-colors p-1.5 hover:bg-white/5 rounded-md shrink-0"
               title="Copy"
             >
               <Copy className="size-3.5" />
@@ -622,7 +808,7 @@ function Bubble({ m, delay = 0 }: { m: DBMessage; delay?: number }) {
   );
 }
 
-function EmptyState({ onPick }: { onPick: (p: string) => void }) {
+function EmptyState({ onPick, hotkeyLabel }: { onPick: (p: string) => void; hotkeyLabel: string }) {
   const suggestions = [
     { icon: Code2, label: "Code", prompt: "Review this function and suggest improvements" },
     { icon: PenLine, label: "Write", prompt: "Draft a concise launch announcement for a new product" },
@@ -661,6 +847,7 @@ function EmptyState({ onPick }: { onPick: (p: string) => void }) {
       <div className="flex items-center justify-center gap-4 mt-10 text-[11px] text-muted-foreground/70">
         <span className="flex items-center gap-1.5"><kbd className="px-1.5 py-0.5 bg-white/5 border border-border/60 rounded font-mono text-[10px]">↵</kbd> Send</span>
         <span className="flex items-center gap-1.5"><kbd className="px-1.5 py-0.5 bg-white/5 border border-border/60 rounded font-mono text-[10px]">⇧↵</kbd> New line</span>
+        <span className="flex items-center gap-1.5"><kbd className="px-1.5 py-0.5 bg-white/5 border border-border/60 rounded font-mono text-[10px]">{hotkeyLabel}</kbd> Hold to talk</span>
         <span className="flex items-center gap-1.5"><Paperclip className="size-3" /> Attach</span>
       </div>
     </div>
