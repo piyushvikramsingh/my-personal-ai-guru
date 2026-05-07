@@ -489,9 +489,6 @@ export function ChatApp() {
         {/* Composer */}
         <div className="bg-background pt-2">
           <div className="max-w-3xl mx-auto px-6 pb-5">
-        {/* Composer */}
-        <div className="bg-background pt-2">
-          <div className="max-w-3xl mx-auto px-6 pb-5">
             {voice.listening && (
               <div className="mb-2 flex items-center gap-3 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2.5 text-[13px] text-red-200 animate-fadeInUp">
                 <span className="relative flex size-2.5">
