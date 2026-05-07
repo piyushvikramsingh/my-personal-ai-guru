@@ -11,6 +11,8 @@ export type VoiceSession = {
   error?: string;
 };
 
+// ─── Persistence helpers ─────────────────────────────────────────────────────
+
 const SESSION_KEY = "void.voice.sessions";
 const HOTKEY_KEY = "void.voice.hotkey";
 const DEFAULT_HOTKEY = " "; // Space
@@ -33,10 +35,9 @@ export function getVoiceSessions(): VoiceSession[] {
   }
 }
 
-function saveSession(s: VoiceSession) {
+function persistSession(s: VoiceSession) {
   const all = getVoiceSessions();
-  const updated = [s, ...all].slice(0, 50);
-  localStorage.setItem(SESSION_KEY, JSON.stringify(updated));
+  localStorage.setItem(SESSION_KEY, JSON.stringify([s, ...all].slice(0, 50)));
 }
 
 export function clearVoiceSessions() {
@@ -44,7 +45,7 @@ export function clearVoiceSessions() {
   localStorage.removeItem(SESSION_KEY);
 }
 
-type SpeechRecognitionEvent = any;
+// ─── Speech recognition hook ─────────────────────────────────────────────────
 
 export type UseSpeechRecognitionOptions = {
   onResult: (text: string, isFinal: boolean) => void;
@@ -52,32 +53,39 @@ export type UseSpeechRecognitionOptions = {
   onSessionEnd?: (session: VoiceSession) => void;
 };
 
-export function useSpeechRecognition({
-  onResult,
-  onStatusChange,
-  onSessionEnd,
-}: UseSpeechRecognitionOptions) {
+export function useSpeechRecognition(opts: UseSpeechRecognitionOptions) {
   const [listening, setListening] = useState(false);
   const [supported, setSupported] = useState(false);
   const [status, setStatus] = useState<VoiceStatus>("idle");
   const [permissionDenied, setPermissionDenied] = useState(false);
+
+  // Store callbacks in refs so they never change identity — avoids infinite effect loops.
+  const onResultRef = useRef(opts.onResult);
+  const onStatusChangeRef = useRef(opts.onStatusChange);
+  const onSessionEndRef = useRef(opts.onSessionEnd);
+  useEffect(() => { onResultRef.current = opts.onResult; });
+  useEffect(() => { onStatusChangeRef.current = opts.onStatusChange; });
+  useEffect(() => { onSessionEndRef.current = opts.onSessionEnd; });
+
   const recRef = useRef<any | null>(null);
   const sessionRef = useRef<{ id: string; startedAt: string; transcript: string } | null>(null);
-  const isMountedRef = useRef(true);
+  const mountedRef = useRef(false);
 
-  const updateStatus = useCallback(
-    (s: VoiceStatus) => {
-      setStatus(s);
-      onStatusChange?.(s);
-    },
-    [onStatusChange]
-  );
+  const updateStatus = useCallback((s: VoiceStatus) => {
+    if (!mountedRef.current) return;
+    setStatus(s);
+    onStatusChangeRef.current?.(s);
+  }, []);
 
-  const initRecognizer = useCallback(() => {
+  const buildRecognizer = useCallback(() => {
     if (typeof window === "undefined") return false;
-    const Ctor =
-      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    const Ctor = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!Ctor) return false;
+
+    if (recRef.current) {
+      try { recRef.current.stop(); } catch {}
+      recRef.current = null;
+    }
 
     const rec = new Ctor();
     rec.continuous = false;
@@ -85,12 +93,12 @@ export function useSpeechRecognition({
     rec.lang = "en-US";
 
     rec.onstart = () => {
-      if (!isMountedRef.current) return;
+      if (!mountedRef.current) return;
       setListening(true);
       updateStatus("listening");
     };
 
-    rec.onresult = (e: SpeechRecognitionEvent) => {
+    rec.onresult = (e: any) => {
       let text = "";
       let isFinal = false;
       for (let i = e.resultIndex; i < e.results.length; i++) {
@@ -99,11 +107,11 @@ export function useSpeechRecognition({
       }
       if (sessionRef.current) sessionRef.current.transcript = text;
       if (isFinal) updateStatus("finalizing");
-      onResult(text, isFinal);
+      onResultRef.current(text, isFinal);
     };
 
     rec.onend = () => {
-      if (!isMountedRef.current) return;
+      if (!mountedRef.current) return;
       setListening(false);
       const sess = sessionRef.current;
       if (sess) {
@@ -114,23 +122,19 @@ export function useSpeechRecognition({
           status: sess.transcript.trim() ? "success" : "cancelled",
           transcript: sess.transcript,
         };
-        saveSession(session);
-        onSessionEnd?.(session);
+        persistSession(session);
+        onSessionEndRef.current?.(session);
         sessionRef.current = null;
       }
       updateStatus("idle");
     };
 
     rec.onerror = (e: any) => {
-      if (!isMountedRef.current) return;
+      if (!mountedRef.current) return;
       setListening(false);
       const isDenied = e.error === "not-allowed" || e.error === "permission-denied";
-      if (isDenied) {
-        setPermissionDenied(true);
-        updateStatus("denied");
-      } else {
-        updateStatus("error");
-      }
+      if (isDenied) setPermissionDenied(true);
+      updateStatus(isDenied ? "denied" : "error");
       const sess = sessionRef.current;
       if (sess) {
         const session: VoiceSession = {
@@ -141,43 +145,39 @@ export function useSpeechRecognition({
           transcript: sess.transcript,
           error: e.error ?? "unknown",
         };
-        saveSession(session);
-        onSessionEnd?.(session);
+        persistSession(session);
+        onSessionEndRef.current?.(session);
         sessionRef.current = null;
       }
     };
 
     recRef.current = rec;
     return true;
-  }, [onResult, onSessionEnd, updateStatus]);
+  }, [updateStatus]); // stable — updateStatus is also stable (useCallback with [])
 
+  // Initialize once on mount — deps are empty because we use refs for callbacks.
   useEffect(() => {
-    isMountedRef.current = true;
-    const ok = initRecognizer();
+    mountedRef.current = true;
+    const ok = buildRecognizer();
     setSupported(ok);
     return () => {
-      isMountedRef.current = false;
-      try {
-        recRef.current?.stop();
-      } catch {}
+      mountedRef.current = false;
+      try { recRef.current?.stop(); } catch {}
+      recRef.current = null;
     };
-  }, [initRecognizer]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const reinitialize = useCallback(() => {
-    try {
-      recRef.current?.stop();
-    } catch {}
     setPermissionDenied(false);
-    const ok = initRecognizer();
+    const ok = buildRecognizer();
     setSupported(ok);
-    updateStatus(ok ? "idle" : "error");
+    if (!ok) updateStatus("error");
     return ok;
-  }, [initRecognizer, updateStatus]);
+  }, [buildRecognizer, updateStatus]);
 
   const start = useCallback(() => {
     if (!recRef.current) {
-      const ok = reinitialize();
-      if (!ok) return;
+      if (!reinitialize()) return;
     }
     try {
       sessionRef.current = {
@@ -186,17 +186,17 @@ export function useSpeechRecognition({
         transcript: "",
       };
       recRef.current!.start();
-    } catch (e: any) {
+    } catch {
       updateStatus("error");
     }
   }, [reinitialize, updateStatus]);
 
   const stop = useCallback(() => {
-    try {
-      recRef.current?.stop();
-    } catch {}
-    setListening(false);
-    updateStatus("idle");
+    try { recRef.current?.stop(); } catch {}
+    if (mountedRef.current) {
+      setListening(false);
+      updateStatus("idle");
+    }
   }, [updateStatus]);
 
   return {
@@ -207,13 +207,11 @@ export function useSpeechRecognition({
     start,
     stop,
     reinitialize,
-    toggle: () => (listening ? stop() : start()),
+    toggle: listening ? stop : start,
   };
 }
 
-// ─── TTS helpers ────────────────────────────────────────────────────────────
-
-export type TTSState = "idle" | "speaking" | "paused";
+// ─── TTS helpers ─────────────────────────────────────────────────────────────
 
 const SPEED_KEY = "void.tts.speed";
 export function getTTSSpeed(): number {
@@ -225,90 +223,79 @@ export function setTTSSpeed(v: number) {
   localStorage.setItem(SPEED_KEY, String(v));
 }
 
-let activeMsgId: string | null = null;
-const listeners = new Set<() => void>();
-function notifyListeners() {
-  listeners.forEach((fn) => fn());
-}
+let _activeMsgId: string | null = null;
+const _ttsListeners = new Set<() => void>();
 
-export function getActiveMsgId() {
-  return activeMsgId;
+function _notifyTTS() {
+  _ttsListeners.forEach((fn) => fn());
 }
 
 export function speakMessage(msgId: string, text: string, speed = getTTSSpeed()) {
   if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
   window.speechSynthesis.cancel();
-  activeMsgId = msgId;
-  notifyListeners();
-  const u = new SpeechSynthesisUtterance(text.replace(/```[\s\S]*?```/g, "").replace(/[#*_`>]/g, "").slice(0, 2000));
+  _activeMsgId = msgId;
+  _notifyTTS();
+  const u = new SpeechSynthesisUtterance(
+    text.replace(/```[\s\S]*?```/g, "").replace(/[#*_`>]/g, "").slice(0, 2000)
+  );
   u.rate = speed;
   u.pitch = 1;
   u.volume = 1;
-  u.onend = () => {
-    activeMsgId = null;
-    notifyListeners();
-  };
-  u.onerror = () => {
-    activeMsgId = null;
-    notifyListeners();
-  };
+  u.onend = () => { _activeMsgId = null; _notifyTTS(); };
+  u.onerror = () => { _activeMsgId = null; _notifyTTS(); };
   window.speechSynthesis.speak(u);
 }
 
 export function pauseTTS() {
   if (typeof window !== "undefined" && "speechSynthesis" in window) {
     window.speechSynthesis.pause();
-    notifyListeners();
+    _notifyTTS();
   }
 }
 
 export function resumeTTS() {
   if (typeof window !== "undefined" && "speechSynthesis" in window) {
     window.speechSynthesis.resume();
-    notifyListeners();
+    _notifyTTS();
   }
 }
 
 export function stopTTS() {
   if (typeof window !== "undefined" && "speechSynthesis" in window) {
     window.speechSynthesis.cancel();
-    activeMsgId = null;
-    notifyListeners();
   }
+  _activeMsgId = null;
+  _notifyTTS();
 }
 
 export function isTTSSpeaking() {
-  return typeof window !== "undefined" && window.speechSynthesis?.speaking && !window.speechSynthesis?.paused;
+  return typeof window !== "undefined" && !!window.speechSynthesis?.speaking && !window.speechSynthesis?.paused;
 }
 
 export function isTTSPaused() {
-  return typeof window !== "undefined" && window.speechSynthesis?.paused;
+  return typeof window !== "undefined" && !!window.speechSynthesis?.paused;
 }
 
 export function useTTSState(msgId: string) {
-  const [, forceUpdate] = useState(0);
+  const [tick, setTick] = useState(0);
   useEffect(() => {
-    const fn = () => forceUpdate((n) => n + 1);
-    listeners.add(fn);
-    const interval = setInterval(fn, 300);
-    return () => {
-      listeners.delete(fn);
-      clearInterval(interval);
-    };
+    const bump = () => setTick((n) => n + 1);
+    _ttsListeners.add(bump);
+    // Poll every 300 ms to catch native speechSynthesis state changes
+    const id = setInterval(bump, 300);
+    return () => { _ttsListeners.delete(bump); clearInterval(id); };
   }, []);
-  const isActive = activeMsgId === msgId;
-  const speaking = isActive && isTTSSpeaking();
-  const paused = isActive && isTTSPaused();
-  return { isActive, speaking, paused };
+  const isActive = _activeMsgId === msgId;
+  return {
+    isActive,
+    speaking: isActive && isTTSSpeaking(),
+    paused: isActive && isTTSPaused(),
+  };
 }
 
-// Legacy exports for backward compat
-export function speak(text: string) {
-  speakMessage("__legacy__", text);
-}
-export function stopSpeaking() {
-  stopTTS();
-}
+// ─── Legacy compat ───────────────────────────────────────────────────────────
+export function speak(text: string) { speakMessage("__legacy__", text); }
+export function stopSpeaking() { stopTTS(); }
 
 const VOICE_KEY = "void.voice.autoSpeak";
 export function getAutoSpeak(): boolean {

@@ -114,6 +114,7 @@ export function ChatApp() {
   const [showPreview, setShowPreview] = useState(false);
 
   // Push-to-talk hotkey state
+  const [hotkeyLabel, setHotkeyLabel] = useState("Space");
   const pttKeyRef = useRef<string>(" ");
   const pttHeldRef = useRef(false);
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -140,7 +141,9 @@ export function ChatApp() {
   useEffect(() => {
     setSettings(loadSettings());
     setAutoSpeakOnState(getAutoSpeak());
-    pttKeyRef.current = getVoiceHotkey();
+    const hk = getVoiceHotkey();
+    pttKeyRef.current = hk;
+    setHotkeyLabel(hk === " " ? "Space" : hk || "Space");
   }, []);
 
   // AuthGate guarantees session before mount.
@@ -443,11 +446,6 @@ export function ChatApp() {
     setPendingAction(null);
     toast.success(`${action.type === "email" ? "Email" : action.type === "calendar" ? "Event" : "Message"} sent via integration.`);
   };
-
-  const hotkeyLabel = (() => {
-    const k = getVoiceHotkey();
-    return k === " " ? "Space" : k || "Space";
-  })();
 
   return (
     <div className="h-screen flex bg-background text-foreground selection:bg-white selection:text-black">
