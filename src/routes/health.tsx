@@ -6,7 +6,7 @@ import { Upload, Activity, Heart, Footprints, Moon, Loader2, AlertTriangle, Info
 import { Markdown } from "@/components/chat/Markdown";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { loadSettings } from "@/components/chat/Settings";
+import { loadSettings } from "@/lib/void-config";
 import { parseHealthFile, type ParsedHealthData } from "@/lib/health-parser";
 
 export const Route = createFileRoute("/health")({

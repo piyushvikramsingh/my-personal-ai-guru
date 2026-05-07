@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { MODELS, DEFAULT_SYSTEM_PROMPT, loadSettings, type VoidSettings } from "@/components/chat/Settings";
+import { MODELS, PROMPT_TEMPLATES, DEFAULT_SYSTEM_PROMPT, loadSettings, saveSettings, type VoidSettings } from "@/lib/void-config";
 import { getAutoSpeak, setAutoSpeak, getVoiceHotkey, setVoiceHotkey, getTTSSpeed, setTTSSpeed } from "@/hooks/use-voice";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -24,15 +24,6 @@ export const Route = createFileRoute("/settings")({
   }),
   component: SettingsPage,
 });
-
-const KEY = "void.settings.v1";
-
-const TEMPLATES = [
-  { name: "Default", prompt: DEFAULT_SYSTEM_PROMPT },
-  { name: "Code Reviewer", prompt: "You are a senior software engineer. Review code for bugs, security, performance, and clarity. Suggest concrete fixes with code snippets." },
-  { name: "Socratic Tutor", prompt: "You are a Socratic tutor. Ask guiding questions, never give the answer immediately. Adapt to the learner's level." },
-  { name: "Concise Analyst", prompt: "You are a concise analyst. Always answer in tight bullet points. End with a one-line takeaway." },
-];
 
 const INTEGRATION_META: Record<IntegrationId, { name: string; icon: React.ElementType; color: string }> = {
   gmail: { name: "Gmail", icon: Mail, color: "text-red-400" },
@@ -104,7 +95,7 @@ function SettingsPage() {
 
         <Section title="System prompt">
           <div className="flex flex-wrap gap-1.5 mb-2">
-            {TEMPLATES.map((t) => (
+            {PROMPT_TEMPLATES.map((t) => (
               <button key={t.name} onClick={() => setS({ ...s, systemPrompt: t.prompt })}
                 className="text-[11px] px-2.5 py-1 rounded-md border border-border bg-card hover:bg-white hover:text-black transition-colors">
                 {t.name}
