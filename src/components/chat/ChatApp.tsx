@@ -65,7 +65,13 @@ export function ChatApp() {
   const [editTitle, setEditTitle] = useState("");
   const [debug, setDebug] = useState<DebugInfo>({});
   const [settings, setSettings] = useState<VoidSettings>(() => loadSettings());
+  const [autoSpeakOn, setAutoSpeakOn] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const voice = useSpeechRecognition((text, isFinal) => {
+    setInput(text);
+    if (isFinal) setTimeout(() => { /* user can press send */ }, 0);
+  });
+  useEffect(() => { setAutoSpeakOn(getAutoSpeak()); }, []);
 
   // AuthGate guarantees a session before this component mounts.
   useEffect(() => {
@@ -284,6 +290,7 @@ export function ChatApp() {
       };
       setMessages((m) => [...m, assistantMsg]);
       setStreaming("");
+      if (autoSpeakOn) speak(finalContent.replace(/```[\s\S]*?```/g, "").replace(/[#*_`>]/g, "").slice(0, 1500));
       loadConvs();
     } catch (e: any) {
       toast.error(e.message ?? "Network error");
