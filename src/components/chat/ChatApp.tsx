@@ -11,8 +11,10 @@ import { DebugPanel, type DebugInfo } from "./DebugPanel";
 import { SettingsDialog, loadSettings, type VoidSettings } from "./Settings";
 import { ingestDocument } from "@/lib/documents.functions";
 import {
-  Plus, Send, MessageSquare, Trash2, FolderOpen, User2, Copy, RotateCcw, Edit2, Search, X, Check, Globe, BookOpen, Brain, Code2, PenLine, Lightbulb, ArrowUp, Paperclip, Command,
+  Plus, Send, MessageSquare, Trash2, FolderOpen, User2, Copy, RotateCcw, Edit2, Search, X, Check, Globe, BookOpen, Brain, Code2, PenLine, Lightbulb, ArrowUp, Paperclip, Command, Mic, MicOff, Volume2, VolumeX,
 } from "lucide-react";
+import { NavRail } from "@/components/NavRail";
+import { useSpeechRecognition, speak, stopSpeaking, getAutoSpeak, setAutoSpeak } from "@/hooks/use-voice";
 
 // Minimal void mark — a precise, geometric "•" inside a ring. Feels like a real brand.
 function VoidMark({ className = "size-5" }: { className?: string }) {
