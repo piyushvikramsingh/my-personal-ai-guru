@@ -67,9 +67,13 @@ export function ChatApp() {
   const [settings, setSettings] = useState<VoidSettings>(() => loadSettings());
   const [autoSpeakOn, setAutoSpeakOn] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const sendRef = useRef<() => void>(() => {});
   const voice = useSpeechRecognition((text, isFinal) => {
     setInput(text);
-    if (isFinal) setTimeout(() => { /* user can press send */ }, 0);
+    if (isFinal && text.trim()) {
+      // auto-submit on final transcript (push-to-talk)
+      setTimeout(() => sendRef.current?.(), 50);
+    }
   });
   useEffect(() => { setAutoSpeakOn(getAutoSpeak()); }, []);
 
@@ -300,6 +304,8 @@ export function ChatApp() {
     }
   };
 
+  useEffect(() => { sendRef.current = send; });
+
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
   };
@@ -483,6 +489,22 @@ export function ChatApp() {
         {/* Composer */}
         <div className="bg-background pt-2">
           <div className="max-w-3xl mx-auto px-6 pb-5">
+            {voice.listening && (
+              <div className="mb-2 flex items-center gap-3 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2.5 text-[13px] text-red-200 animate-fadeInUp">
+                <span className="relative flex size-2.5">
+                  <span className="absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75 animate-ping"></span>
+                  <span className="relative inline-flex rounded-full size-2.5 bg-red-500"></span>
+                </span>
+                <span className="flex-1">Listening… speak now. Will auto-send when you pause.</span>
+                <button
+                  type="button"
+                  onClick={voice.stop}
+                  className="text-xs text-red-200/80 hover:text-white underline-offset-2 hover:underline"
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
             {attachments.length > 0 && (
               <div className="flex flex-wrap gap-2 mb-2">
                 {attachments.map((a, i) => (
