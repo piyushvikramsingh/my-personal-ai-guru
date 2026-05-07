@@ -306,6 +306,7 @@ export function ChatApp() {
 
   return (
     <div className="h-screen flex bg-background text-foreground selection:bg-white selection:text-black">
+      <NavRail />
       {/* Sidebar */}
       <aside className="w-72 shrink-0 border-r border-border/60 bg-sidebar text-sidebar-foreground flex flex-col">
         <div className="px-5 pt-5 pb-3 flex items-center gap-2.5">
