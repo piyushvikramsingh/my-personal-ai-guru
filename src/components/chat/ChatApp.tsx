@@ -304,6 +304,8 @@ export function ChatApp() {
     }
   };
 
+  useEffect(() => { sendRef.current = send; });
+
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
   };
