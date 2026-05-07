@@ -11,8 +11,10 @@ import { DebugPanel, type DebugInfo } from "./DebugPanel";
 import { SettingsDialog, loadSettings, type VoidSettings } from "./Settings";
 import { ingestDocument } from "@/lib/documents.functions";
 import {
-  Plus, Send, MessageSquare, Trash2, FolderOpen, User2, Copy, RotateCcw, Edit2, Search, X, Check, Globe, BookOpen, Brain, Code2, PenLine, Lightbulb, ArrowUp, Paperclip, Command,
+  Plus, Send, MessageSquare, Trash2, FolderOpen, User2, Copy, RotateCcw, Edit2, Search, X, Check, Globe, BookOpen, Brain, Code2, PenLine, Lightbulb, ArrowUp, Paperclip, Command, Mic, MicOff, Volume2, VolumeX,
 } from "lucide-react";
+import { NavRail } from "@/components/NavRail";
+import { useSpeechRecognition, speak, stopSpeaking, getAutoSpeak, setAutoSpeak } from "@/hooks/use-voice";
 
 // Minimal void mark — a precise, geometric "•" inside a ring. Feels like a real brand.
 function VoidMark({ className = "size-5" }: { className?: string }) {
@@ -63,7 +65,13 @@ export function ChatApp() {
   const [editTitle, setEditTitle] = useState("");
   const [debug, setDebug] = useState<DebugInfo>({});
   const [settings, setSettings] = useState<VoidSettings>(() => loadSettings());
+  const [autoSpeakOn, setAutoSpeakOn] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const voice = useSpeechRecognition((text, isFinal) => {
+    setInput(text);
+    if (isFinal) setTimeout(() => { /* user can press send */ }, 0);
+  });
+  useEffect(() => { setAutoSpeakOn(getAutoSpeak()); }, []);
 
   // AuthGate guarantees a session before this component mounts.
   useEffect(() => {
@@ -282,6 +290,7 @@ export function ChatApp() {
       };
       setMessages((m) => [...m, assistantMsg]);
       setStreaming("");
+      if (autoSpeakOn) speak(finalContent.replace(/```[\s\S]*?```/g, "").replace(/[#*_`>]/g, "").slice(0, 1500));
       loadConvs();
     } catch (e: any) {
       toast.error(e.message ?? "Network error");
@@ -297,6 +306,7 @@ export function ChatApp() {
 
   return (
     <div className="h-screen flex bg-background text-foreground selection:bg-white selection:text-black">
+      <NavRail />
       {/* Sidebar */}
       <aside className="w-72 shrink-0 border-r border-border/60 bg-sidebar text-sidebar-foreground flex flex-col">
         <div className="px-5 pt-5 pb-3 flex items-center gap-2.5">
@@ -416,6 +426,15 @@ export function ChatApp() {
             </h1>
           </div>
           <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => { const v = !autoSpeakOn; setAutoSpeakOn(v); setAutoSpeak(v); if (!v) stopSpeaking(); }}
+              title={autoSpeakOn ? "Voice replies on" : "Voice replies off"}
+              className="size-8 hover:bg-white/5 text-muted-foreground hover:text-white"
+            >
+              {autoSpeakOn ? <Volume2 className="size-4" /> : <VolumeX className="size-4" />}
+            </Button>
             <SettingsDialog settings={settings} onChange={setSettings} />
           </div>
         </header>
@@ -486,6 +505,18 @@ export function ChatApp() {
               <div className="flex items-center justify-between px-2.5 pb-2.5">
                 <div className="flex items-center gap-0.5">
                   <FilePicker onPick={(a) => setAttachments((arr) => [...arr, a])} />
+                  {voice.supported && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      type="button"
+                      title={voice.listening ? "Stop listening" : "Talk to void"}
+                      onClick={voice.toggle}
+                      className={`size-8 hover:bg-white/5 ${voice.listening ? "text-red-400 animate-pulse" : "text-muted-foreground hover:text-white"}`}
+                    >
+                      {voice.listening ? <MicOff className="size-4" /> : <Mic className="size-4" />}
+                    </Button>
+                  )}
                   <Button variant="ghost" size="icon" type="button" title="Pick from Google Drive" onClick={() => setDriveOpen(true)} className="size-8 hover:bg-white/5 text-muted-foreground hover:text-white">
                     <FolderOpen className="size-4" />
                   </Button>
