@@ -9,12 +9,30 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as IntegrationsRouteImport } from './routes/integrations'
+import { Route as HealthRouteImport } from './routes/health'
 import { Route as ChatRouteImport } from './routes/chat'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiRlsCheckRouteImport } from './routes/api/rls-check'
 import { Route as ApiChatRouteImport } from './routes/api/chat'
 
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const IntegrationsRoute = IntegrationsRouteImport.update({
+  id: '/integrations',
+  path: '/integrations',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HealthRoute = HealthRouteImport.update({
+  id: '/health',
+  path: '/health',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ChatRoute = ChatRouteImport.update({
   id: '/chat',
   path: '/chat',
@@ -45,6 +63,9 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/chat': typeof ChatRoute
+  '/health': typeof HealthRoute
+  '/integrations': typeof IntegrationsRoute
+  '/settings': typeof SettingsRoute
   '/api/chat': typeof ApiChatRoute
   '/api/rls-check': typeof ApiRlsCheckRoute
 }
@@ -52,6 +73,9 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/chat': typeof ChatRoute
+  '/health': typeof HealthRoute
+  '/integrations': typeof IntegrationsRoute
+  '/settings': typeof SettingsRoute
   '/api/chat': typeof ApiChatRoute
   '/api/rls-check': typeof ApiRlsCheckRoute
 }
@@ -60,27 +84,79 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/chat': typeof ChatRoute
+  '/health': typeof HealthRoute
+  '/integrations': typeof IntegrationsRoute
+  '/settings': typeof SettingsRoute
   '/api/chat': typeof ApiChatRoute
   '/api/rls-check': typeof ApiRlsCheckRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/auth' | '/chat' | '/api/chat' | '/api/rls-check'
+  fullPaths:
+    | '/'
+    | '/auth'
+    | '/chat'
+    | '/health'
+    | '/integrations'
+    | '/settings'
+    | '/api/chat'
+    | '/api/rls-check'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/auth' | '/chat' | '/api/chat' | '/api/rls-check'
-  id: '__root__' | '/' | '/auth' | '/chat' | '/api/chat' | '/api/rls-check'
+  to:
+    | '/'
+    | '/auth'
+    | '/chat'
+    | '/health'
+    | '/integrations'
+    | '/settings'
+    | '/api/chat'
+    | '/api/rls-check'
+  id:
+    | '__root__'
+    | '/'
+    | '/auth'
+    | '/chat'
+    | '/health'
+    | '/integrations'
+    | '/settings'
+    | '/api/chat'
+    | '/api/rls-check'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthRoute: typeof AuthRoute
   ChatRoute: typeof ChatRoute
+  HealthRoute: typeof HealthRoute
+  IntegrationsRoute: typeof IntegrationsRoute
+  SettingsRoute: typeof SettingsRoute
   ApiChatRoute: typeof ApiChatRoute
   ApiRlsCheckRoute: typeof ApiRlsCheckRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/integrations': {
+      id: '/integrations'
+      path: '/integrations'
+      fullPath: '/integrations'
+      preLoaderRoute: typeof IntegrationsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/health': {
+      id: '/health'
+      path: '/health'
+      fullPath: '/health'
+      preLoaderRoute: typeof HealthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/chat': {
       id: '/chat'
       path: '/chat'
@@ -123,9 +199,21 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthRoute: AuthRoute,
   ChatRoute: ChatRoute,
+  HealthRoute: HealthRoute,
+  IntegrationsRoute: IntegrationsRoute,
+  SettingsRoute: SettingsRoute,
   ApiChatRoute: ApiChatRoute,
   ApiRlsCheckRoute: ApiRlsCheckRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { createStart } from '@tanstack/react-start'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+  }
+}
