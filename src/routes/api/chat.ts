@@ -221,15 +221,20 @@ export const Route = createFileRoute("/api/chat")({
           }
         }
 
-        // Prefer service-role key (bypasses RLS); fall back to publishable key
-        const supabaseKey =
-          process.env.SUPABASE_SERVICE_ROLE_KEY ||
-          process.env.SUPABASE_PUBLISHABLE_KEY ||
-          "";
+        // Prefer service-role key (bypasses RLS). If unavailable, use the
+        // publishable key but forward the user's Bearer token so auth.uid()
+        // resolves correctly under RLS policies.
+        const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+        const supabaseKey = serviceKey || process.env.SUPABASE_PUBLISHABLE_KEY || "";
         const supabase = createClient(
           process.env.SUPABASE_URL!,
           supabaseKey,
-          { auth: { persistSession: false } }
+          {
+            auth: { persistSession: false },
+            global: serviceKey
+              ? {}
+              : { headers: { Authorization: `Bearer ${token}` } },
+          }
         );
 
         const body = (await request.json()) as {

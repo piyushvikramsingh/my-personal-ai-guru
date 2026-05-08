@@ -59,7 +59,7 @@ function SettingsPage() {
   }, [refreshIntegrations]);
 
   function save() {
-    localStorage.setItem(KEY, JSON.stringify(s));
+    saveSettings(s);
     setAutoSpeak(autoSpeakOn);
     setVoiceHotkey(hotkey);
     setTTSSpeed(ttsSpeed);

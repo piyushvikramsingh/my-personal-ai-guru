@@ -75,7 +75,7 @@ function AuthPage() {
           <div className="size-9 rounded-xl bg-primary/15 flex items-center justify-center">
             <Sparkles className="size-5 text-primary" />
           </div>
-          <span className="text-xl font-semibold tracking-tight">Nova</span>
+          <span className="text-xl font-semibold tracking-tight">void</span>
         </Link>
         <div className="rounded-2xl border bg-card p-7 shadow-xl">
           <h1 className="text-2xl font-semibold">{mode === "signin" ? "Welcome back" : "Create your account"}</h1>
