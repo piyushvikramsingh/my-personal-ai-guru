@@ -7,31 +7,49 @@
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 import type { Plugin } from "vite";
 
-// The Lovable componentTagger intercepts react/jsx-dev-runtime and replaces it with
-// a virtual module containing `const _isBrowser = typeof window !== "undefined"`.
-// This adds data-* attributes to React elements ONLY on the client, not during SSR,
-// causing every element to differ between server and client → hydration mismatch.
+// The Lovable componentTagger ("lovable-plugin") intercepts react/jsx-dev-runtime and
+// replaces it with a virtual module whose jsxDEV wrapper checks:
 //
-// Fix: patch the tagger's virtual module in the transform hook to always use
-// _isBrowser = false, making server and client renders identical.
+//   const _isBrowser = typeof window !== "undefined";
+//
+// On the server (SSR), _isBrowser = false → passes through to real jsxDEV.
+// On the client, _isBrowser = true → wraps props with ref callbacks that store source info.
+//
+// The ref-prop additions change the React element (even if no DOM attribute is written),
+// which causes React 19's strict hydration to detect a mismatch between the server-rendered
+// tree and the initial client render → "Hydration failed" + "Invalid hook call" on first load.
+//
+// Fix strategy: patch the tagger's own load hook after config is resolved ("configResolved").
+// This runs after all plugins are ordered, bypassing the plugin-ordering problem, and wraps
+// the tagger's load to replace `_isBrowser = typeof window !== "undefined"` with
+// `_isBrowser = false` so both SSR and client use the same pass-through jsxDEV.
 function fixSSRHydrationPlugin(): Plugin {
   const TAGGER_VIRTUAL_ID = "\0jsx-source/jsx-dev-runtime";
+  const PATTERN = 'const _isBrowser = typeof window !== "undefined"';
+  const REPLACEMENT = "const _isBrowser = false";
+
   return {
     name: "fix-ssr-hydration-tagger",
-    enforce: "post",
-    transform(code, id) {
-      if (id === TAGGER_VIRTUAL_ID) {
-        const patched = code.replace(
-          'const _isBrowser = typeof window !== "undefined"',
-          "const _isBrowser = false",
-        );
-        if (patched === code) {
-          console.warn("[fix-ssr-hydration] WARNING: pattern not found in", id);
-        } else {
-          console.log("[fix-ssr-hydration] Patched _isBrowser in", id);
-        }
-        return patched;
-      }
+    // configResolved runs after all plugins are merged — we can safely mutate the tagger here.
+    configResolved(config) {
+      const tagger = config.plugins.find((p) => p.name === "lovable-plugin");
+      if (!tagger) return;
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const originalLoad = (tagger as any).load as
+        | ((id: string) => string | null | undefined)
+        | undefined;
+      if (!originalLoad) return;
+
+      // Replace the tagger's load hook with our patched version.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (tagger as any).load = function (this: unknown, id: string) {
+        const result = originalLoad.call(this, id);
+        if (id !== TAGGER_VIRTUAL_ID || !result) return result;
+
+        const code = typeof result === "string" ? result : (result as { code: string }).code;
+        return code.includes(PATTERN) ? code.replace(PATTERN, REPLACEMENT) : result;
+      };
     },
   };
 }
