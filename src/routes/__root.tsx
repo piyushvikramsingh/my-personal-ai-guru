@@ -41,9 +41,18 @@ export const Route = createRootRoute({
     links: [{ rel: "stylesheet", href: appCss }],
   }),
   shellComponent: RootShell,
-  component: () => <Outlet />,
+  component: RootContent,
   notFoundComponent: NotFoundComponent,
 });
+
+function RootContent() {
+  return (
+    <>
+      <Outlet />
+      <Toaster theme="dark" richColors position="top-center" />
+    </>
+  );
+}
 
 function RootShell({ children }: { children: React.ReactNode }) {
   return (
@@ -51,7 +60,6 @@ function RootShell({ children }: { children: React.ReactNode }) {
       <head><HeadContent /></head>
       <body>
         {children}
-        <Toaster theme="dark" richColors position="top-center" />
         <Scripts />
       </body>
     </html>
