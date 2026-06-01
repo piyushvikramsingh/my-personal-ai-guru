@@ -653,7 +653,7 @@ export function ChatApp() {
                 status={voiceStatus}
                 transcript={input}
                 onCancel={() => { voice.stop(); setVoiceStatus("idle"); setInput(""); }}
-                onConfirm={voiceStatus === "finalizing" ? () => handleTranscriptConfirm(input) : undefined}
+                onConfirm={undefined}
               />
             )}
 
