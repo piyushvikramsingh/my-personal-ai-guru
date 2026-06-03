@@ -27,16 +27,21 @@ export const updateMyMemory = createServerFn({ method: "POST" })
       .parse(input),
   )
   .handler(async ({ data, context }) => {
-    const { error } = await context.supabase.from("user_memory").upsert(
-      {
-        user_id: context.userId,
-        ...(data.preferences !== undefined && { preferences: data.preferences }),
-        ...(data.recurring_tasks !== undefined && { recurring_tasks: data.recurring_tasks }),
-        ...(data.fetch_allowlist !== undefined && { fetch_allowlist: data.fetch_allowlist }),
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "user_id" },
-    );
+    const row: {
+      user_id: string;
+      preferences?: unknown;
+      recurring_tasks?: unknown;
+      fetch_allowlist?: string[];
+      updated_at: string;
+    } = {
+      user_id: context.userId,
+      updated_at: new Date().toISOString(),
+    };
+    if (data.preferences !== undefined) row.preferences = data.preferences;
+    if (data.recurring_tasks !== undefined) row.recurring_tasks = data.recurring_tasks;
+    if (data.fetch_allowlist !== undefined) row.fetch_allowlist = data.fetch_allowlist;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await context.supabase.from("user_memory").upsert(row as any, { onConflict: "user_id" });
     if (error) throw new Error(error.message);
     return { ok: true };
   });
