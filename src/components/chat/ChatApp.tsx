@@ -362,6 +362,7 @@ export function ChatApp() {
       const dec = new TextDecoder();
       let buf = "";
       let acc = "";
+      let currentEvent: string | null = null;
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -370,11 +371,29 @@ export function ChatApp() {
         while ((i = buf.indexOf("\n")) !== -1) {
           let line = buf.slice(0, i); buf = buf.slice(i + 1);
           if (line.endsWith("\r")) line = line.slice(0, -1);
+          if (line === "") { currentEvent = null; continue; }
+          if (line.startsWith("event: ")) { currentEvent = line.slice(7).trim(); continue; }
           if (!line.startsWith("data: ")) continue;
           const json = line.slice(6).trim();
           if (json === "[DONE]") continue;
           try {
             const p = JSON.parse(json);
+            if (currentEvent === "agent") {
+              setAgentSteps((prev) => {
+                if (p.kind === "tool_call") {
+                  return [...prev, { kind: "tool_call", id: p.id, name: p.name, args: p.args, status: "running" }];
+                }
+                if (p.kind === "tool_result") {
+                  return prev.map((s) =>
+                    s.id === p.id
+                      ? { kind: "tool_result", id: p.id, name: p.name ?? s.name, args: (s as any).args, status: p.ok ? "ok" : "error", preview: p.preview ?? "" }
+                      : s,
+                  );
+                }
+                return prev;
+              });
+              continue;
+            }
             const d = p.choices?.[0]?.delta?.content;
             if (d) { acc += d; setStreaming(acc); }
           } catch { buf = line + "\n" + buf; break; }
