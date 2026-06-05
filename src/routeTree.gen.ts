@@ -10,9 +10,11 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as MemoryRouteImport } from './routes/memory'
 import { Route as IntegrationsRouteImport } from './routes/integrations'
 import { Route as HealthRouteImport } from './routes/health'
 import { Route as ChatRouteImport } from './routes/chat'
+import { Route as BriefingRouteImport } from './routes/briefing'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiRlsCheckRouteImport } from './routes/api/rls-check'
@@ -21,6 +23,11 @@ import { Route as ApiChatRouteImport } from './routes/api/chat'
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MemoryRoute = MemoryRouteImport.update({
+  id: '/memory',
+  path: '/memory',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IntegrationsRoute = IntegrationsRouteImport.update({
@@ -36,6 +43,11 @@ const HealthRoute = HealthRouteImport.update({
 const ChatRoute = ChatRouteImport.update({
   id: '/chat',
   path: '/chat',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BriefingRoute = BriefingRouteImport.update({
+  id: '/briefing',
+  path: '/briefing',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthRoute = AuthRouteImport.update({
@@ -62,9 +74,11 @@ const ApiChatRoute = ApiChatRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/briefing': typeof BriefingRoute
   '/chat': typeof ChatRoute
   '/health': typeof HealthRoute
   '/integrations': typeof IntegrationsRoute
+  '/memory': typeof MemoryRoute
   '/settings': typeof SettingsRoute
   '/api/chat': typeof ApiChatRoute
   '/api/rls-check': typeof ApiRlsCheckRoute
@@ -72,9 +86,11 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/briefing': typeof BriefingRoute
   '/chat': typeof ChatRoute
   '/health': typeof HealthRoute
   '/integrations': typeof IntegrationsRoute
+  '/memory': typeof MemoryRoute
   '/settings': typeof SettingsRoute
   '/api/chat': typeof ApiChatRoute
   '/api/rls-check': typeof ApiRlsCheckRoute
@@ -83,9 +99,11 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/briefing': typeof BriefingRoute
   '/chat': typeof ChatRoute
   '/health': typeof HealthRoute
   '/integrations': typeof IntegrationsRoute
+  '/memory': typeof MemoryRoute
   '/settings': typeof SettingsRoute
   '/api/chat': typeof ApiChatRoute
   '/api/rls-check': typeof ApiRlsCheckRoute
@@ -95,9 +113,11 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/auth'
+    | '/briefing'
     | '/chat'
     | '/health'
     | '/integrations'
+    | '/memory'
     | '/settings'
     | '/api/chat'
     | '/api/rls-check'
@@ -105,9 +125,11 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/auth'
+    | '/briefing'
     | '/chat'
     | '/health'
     | '/integrations'
+    | '/memory'
     | '/settings'
     | '/api/chat'
     | '/api/rls-check'
@@ -115,9 +137,11 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/auth'
+    | '/briefing'
     | '/chat'
     | '/health'
     | '/integrations'
+    | '/memory'
     | '/settings'
     | '/api/chat'
     | '/api/rls-check'
@@ -126,9 +150,11 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthRoute: typeof AuthRoute
+  BriefingRoute: typeof BriefingRoute
   ChatRoute: typeof ChatRoute
   HealthRoute: typeof HealthRoute
   IntegrationsRoute: typeof IntegrationsRoute
+  MemoryRoute: typeof MemoryRoute
   SettingsRoute: typeof SettingsRoute
   ApiChatRoute: typeof ApiChatRoute
   ApiRlsCheckRoute: typeof ApiRlsCheckRoute
@@ -141,6 +167,13 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/memory': {
+      id: '/memory'
+      path: '/memory'
+      fullPath: '/memory'
+      preLoaderRoute: typeof MemoryRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/integrations': {
@@ -162,6 +195,13 @@ declare module '@tanstack/react-router' {
       path: '/chat'
       fullPath: '/chat'
       preLoaderRoute: typeof ChatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/briefing': {
+      id: '/briefing'
+      path: '/briefing'
+      fullPath: '/briefing'
+      preLoaderRoute: typeof BriefingRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/auth': {
@@ -198,9 +238,11 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthRoute: AuthRoute,
+  BriefingRoute: BriefingRoute,
   ChatRoute: ChatRoute,
   HealthRoute: HealthRoute,
   IntegrationsRoute: IntegrationsRoute,
+  MemoryRoute: MemoryRoute,
   SettingsRoute: SettingsRoute,
   ApiChatRoute: ApiChatRoute,
   ApiRlsCheckRoute: ApiRlsCheckRoute,
@@ -208,13 +250,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

@@ -1,9 +1,11 @@
 import { Link, useLocation } from "@tanstack/react-router";
-import { MessageSquare, Activity, Plug, Settings, Home } from "lucide-react";
+import { MessageSquare, Activity, Plug, Settings, Home, Sparkles, Brain } from "lucide-react";
 
 const items = [
   { to: "/", label: "Home", icon: Home },
   { to: "/chat", label: "Chat", icon: MessageSquare },
+  { to: "/briefing", label: "Daily Briefing", icon: Sparkles },
+  { to: "/memory", label: "Memory", icon: Brain },
   { to: "/health", label: "Health", icon: Activity },
   { to: "/integrations", label: "Integrations", icon: Plug },
   { to: "/settings", label: "Settings", icon: Settings },
