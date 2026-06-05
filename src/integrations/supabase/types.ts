@@ -14,6 +14,33 @@ export type Database = {
   }
   public: {
     Tables: {
+      briefings: {
+        Row: {
+          content: string
+          created_at: string
+          for_date: string
+          id: string
+          summary: string | null
+          user_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          for_date: string
+          id?: string
+          summary?: string | null
+          user_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          for_date?: string
+          id?: string
+          summary?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       conversations: {
         Row: {
           created_at: string
