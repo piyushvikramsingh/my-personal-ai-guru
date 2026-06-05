@@ -98,6 +98,7 @@ export function ChatApp() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [messages, setMessages] = useState<DBMessage[]>([]);
   const [streaming, setStreaming] = useState<string>("");
+  const [agentSteps, setAgentSteps] = useState<import("./AgentActivity").AgentStep[]>([]);
   const [busy, setBusy] = useState(false);
   const [input, setInput] = useState("");
   const [attachments, setAttachments] = useState<LocalAttachment[]>([]);
