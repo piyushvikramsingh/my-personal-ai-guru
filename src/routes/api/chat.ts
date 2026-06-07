@@ -566,6 +566,17 @@ export const Route = createFileRoute("/api/chat")({
                 await applyMemoryPatch({ preferences: next });
                 return JSON.stringify({ ok: true, forgot: key });
               }
+              case "propose_action": {
+                const kind = String(args?.kind ?? "task").slice(0, 40);
+                const title = String(args?.title ?? "").slice(0, 200);
+                if (!title) return JSON.stringify({ error: "missing title" });
+                const details = (args?.details && typeof args.details === "object") ? args.details : {};
+                const { data, error } = await supabase.from("agent_actions")
+                  .insert({ user_id: userId, kind, title, details })
+                  .select("id").single();
+                if (error) return JSON.stringify({ error: error.message });
+                return JSON.stringify({ ok: true, id: data?.id, queued_at: "/actions" });
+              }
               default: return JSON.stringify({ error: `unknown tool ${name}` });
             }
           } catch (e: any) {
