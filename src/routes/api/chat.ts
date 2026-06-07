@@ -61,6 +61,12 @@ const TOOLS = [
     parameters: { type: "object", properties: { key: { type: "string" }, value: {} }, required: ["key", "value"] } } },
   { type: "function", function: { name: "forget", description: "Remove a saved preference.",
     parameters: { type: "object", properties: { key: { type: "string" } }, required: ["key"] } } },
+  { type: "function", function: { name: "propose_action", description: "Queue a proposed action card in the user's Action Inbox (/actions) for them to approve.",
+    parameters: { type: "object", properties: {
+      kind: { type: "string", description: "Short category, e.g. email, calendar, task, reminder, research" },
+      title: { type: "string", description: "One-line human-readable summary of what you propose to do" },
+      details: { type: "object", description: "Structured payload — recipients, subject/body, datetimes, links, etc." },
+    }, required: ["kind", "title"] } } },
 ];
 
 // ─── Sandboxing helpers ──────────────────────────────────────────────────────
