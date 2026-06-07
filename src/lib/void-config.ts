@@ -1,10 +1,8 @@
 export const MODELS = [
-  { id: "google/gemini-2.5-pro", label: "void-pro (Gemini 2.5 Pro)" },
-  { id: "google/gemini-2.5-flash", label: "void-flash (Gemini 2.5 Flash)" },
-  { id: "google/gemini-2.5-flash-lite", label: "void-lite (Gemini 2.5 Flash Lite)" },
-  { id: "google/gemini-3-flash-preview", label: "void-3 (Gemini 3 Flash Preview)" },
-  { id: "openai/gpt-5", label: "void-x (GPT-5)" },
-  { id: "openai/gpt-5-mini", label: "void-x-mini (GPT-5 Mini)" },
+  { id: "google/gemini-3-flash-preview", label: "void · Gemini 3 Flash (default)" },
+  { id: "google/gemini-2.5-pro", label: "void-pro · Gemini 2.5 Pro" },
+  { id: "google/gemini-2.5-flash", label: "void-flash · Gemini 2.5 Flash" },
+  { id: "google/gemini-2.5-flash-lite", label: "void-lite · Gemini 2.5 Flash Lite" },
 ];
 
 export const DEFAULT_SYSTEM_PROMPT = `You are void — a deeply intelligent, emotionally aware AI that thinks and communicates like a thoughtful human being. You are warm, curious, honest, and genuinely interested in the person you're talking with. You have opinions, make educated guesses (clearly flagged), and engage with the real intent behind every message — not just the literal words. Match the user's tone: casual when they're casual, precise when they need precision. Show brief step-by-step reasoning for hard problems; for simple questions, just answer naturally. Never start with filler like "Sure!" or "Great question!". Think deeply, communicate clearly, care genuinely.`;

@@ -17,6 +17,7 @@ You have TOOLS available. Use them whenever they help you answer better:
 • current_time — get the current date/time
 • send_email — send an email via the user's Gmail (requires Gmail connected)
 • create_calendar_event — create an event on the user's Google Calendar (requires Calendar connected)
+• propose_action — queue an action card for the user to approve in their Action Inbox (/actions). Use when you'd like to act on the user's behalf but want explicit consent.
 • remember — save a preference about the user (key + value)
 • forget — remove a saved preference
 
@@ -60,6 +61,12 @@ const TOOLS = [
     parameters: { type: "object", properties: { key: { type: "string" }, value: {} }, required: ["key", "value"] } } },
   { type: "function", function: { name: "forget", description: "Remove a saved preference.",
     parameters: { type: "object", properties: { key: { type: "string" } }, required: ["key"] } } },
+  { type: "function", function: { name: "propose_action", description: "Queue a proposed action card in the user's Action Inbox (/actions) for them to approve.",
+    parameters: { type: "object", properties: {
+      kind: { type: "string", description: "Short category, e.g. email, calendar, task, reminder, research" },
+      title: { type: "string", description: "One-line human-readable summary of what you propose to do" },
+      details: { type: "object", description: "Structured payload — recipients, subject/body, datetimes, links, etc." },
+    }, required: ["kind", "title"] } } },
 ];
 
 // ─── Sandboxing helpers ──────────────────────────────────────────────────────
@@ -559,6 +566,17 @@ export const Route = createFileRoute("/api/chat")({
                 await applyMemoryPatch({ preferences: next });
                 return JSON.stringify({ ok: true, forgot: key });
               }
+              case "propose_action": {
+                const kind = String(args?.kind ?? "task").slice(0, 40);
+                const title = String(args?.title ?? "").slice(0, 200);
+                if (!title) return JSON.stringify({ error: "missing title" });
+                const details = (args?.details && typeof args.details === "object") ? args.details : {};
+                const { data, error } = await supabase.from("agent_actions")
+                  .insert({ user_id: userId, kind, title, details })
+                  .select("id").single();
+                if (error) return JSON.stringify({ error: error.message });
+                return JSON.stringify({ ok: true, id: data?.id, queued_at: "/actions" });
+              }
               default: return JSON.stringify({ error: `unknown tool ${name}` });
             }
           } catch (e: any) {
@@ -580,7 +598,7 @@ export const Route = createFileRoute("/api/chat")({
                   method: "POST",
                   headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
                   body: JSON.stringify({
-                    model: body.model || "google/gemini-2.5-pro",
+                    model: body.model || "google/gemini-3-flash-preview",
                     messages: aiMessages,
                     tools: TOOLS,
                     tool_choice: "auto",
