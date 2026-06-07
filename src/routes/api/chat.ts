@@ -17,6 +17,7 @@ You have TOOLS available. Use them whenever they help you answer better:
 • current_time — get the current date/time
 • send_email — send an email via the user's Gmail (requires Gmail connected)
 • create_calendar_event — create an event on the user's Google Calendar (requires Calendar connected)
+• propose_action — queue an action card for the user to approve in their Action Inbox (/actions). Use when you'd like to act on the user's behalf but want explicit consent.
 • remember — save a preference about the user (key + value)
 • forget — remove a saved preference
 
